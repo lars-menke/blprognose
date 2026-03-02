@@ -458,27 +458,8 @@ const NM = {
 
 const VERSION = 'v1.2.0';
 
-// Wikipedia-Commons-Logos (48px-Thumbnail, onerror → SVG-Badge-Fallback)
-const LOGOS = {
-  BMU:'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282002%E2%80%932017%29.svg/48px-FC_Bayern_M%C3%BCnchen_logo_%282002%E2%80%932017%29.svg.png',
-  BVB:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Borussia_Dortmund_logo.svg/48px-Borussia_Dortmund_logo.svg.png',
-  TSG:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/TSG_1899_Hoffenheim_logo.svg/48px-TSG_1899_Hoffenheim_logo.svg.png',
-  VFB:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/VfB_Stuttgart_Logo.svg/48px-VfB_Stuttgart_Logo.svg.png',
-  RBL:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/RB_Leipzig_2014_logo.svg/48px-RB_Leipzig_2014_logo.svg.png',
-  LEV:'https://upload.wikimedia.org/wikipedia/de/thumb/f/f7/Bayer_Leverkusen_logo.svg/48px-Bayer_Leverkusen_logo.svg.png',
-  SCF:'https://upload.wikimedia.org/wikipedia/de/thumb/0/00/SC_Freiburg.svg/48px-SC_Freiburg.svg.png',
-  SGE:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Eintracht_Frankfurt_Logo.svg/48px-Eintracht_Frankfurt_Logo.svg.png',
-  UNI:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/1._FC_Union_Berlin_Logo.svg/48px-1._FC_Union_Berlin_Logo.svg.png',
-  FCA:'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Logo_FC_Augsburg.svg/48px-Logo_FC_Augsburg.svg.png',
-  HSV:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Hamburger_SV_logo.svg/48px-Hamburger_SV_logo.svg.png',
-  KOE:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Logo_1._FC_K%C3%B6ln.svg/48px-Logo_1._FC_K%C3%B6ln.svg.png',
-  M05:'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Logo_FSV_Mainz_05.svg/48px-Logo_FSV_Mainz_05.svg.png',
-  BMG:'https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Borussia_M%C3%B6nchengladbach_logo.svg/48px-Borussia_M%C3%B6nchengladbach_logo.svg.png',
-  WOB:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Logo-VfL-Wolfsburg.svg/48px-Logo-VfL-Wolfsburg.svg.png',
-  STP:'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/FC_St._Pauli_logo.svg/48px-FC_St._Pauli_logo.svg.png',
-  SVW:'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/SV_Werder_Bremen_logo.svg/48px-SV_Werder_Bremen_logo.svg.png',
-  FCH:'https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/1_FC_Heidenheim_1846.svg/48px-1_FC_Heidenheim_1846.svg.png',
-};
+// Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
+const LOGOS = {};
 
 // Spieltag 24 mit API Win-Probabilities + aktuelle Heim/Auswärtsform (letzte 5 Spiele)
 // hForm: letzte 5 Heimspiele des Heimteams {gf, ga}
@@ -1304,9 +1285,26 @@ function closeInfo(){
   document.getElementById('infoOverlay').classList.remove('open');
 }
 
+// ─── LOGOS VIA OPENLIGADB ────────────────────────────────────────────────────
+// Nutzt dieselbe API + TEAM_CODE_MAP wie die Spieltagsdaten-Abfrage
+async function fetchLogos(){
+  try {
+    const r = await fetch(`${OLDB_BASE}/getavailableteams/${OLDB_LEAGUE}/${OLDB_SEASON}`);
+    if(!r.ok) return;
+    const teams = await r.json();
+    let found = 0;
+    teams.forEach(t => {
+      const code = resolveCode(t);
+      if(code && t.teamIconUrl){ LOGOS[code] = t.teamIconUrl; found++; }
+    });
+    if(found > 0){ renderGames(); renderSummary(); }
+  } catch(e) { /* kein Netz → SVG-Fallback-Badges bleiben */ }
+}
+
 // ─── SPLASH ──────────────────────────────────────────────────────────────────
 function initApp(){
   recalcAll();
+  fetchLogos();   // Logos asynchron laden — Karten rendern sich danach automatisch neu
   // Splash nach 2.4s ausblenden
   setTimeout(()=>{
     const splash = document.getElementById('splash');
