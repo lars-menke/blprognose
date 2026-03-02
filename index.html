@@ -424,7 +424,7 @@ const NM = {
 // Spieltag 24 mit API Win-Probabilities + aktuelle Heim/Auswärtsform (letzte 5 Spiele)
 // hForm: letzte 5 Heimspiele des Heimteams {gf, ga}
 // aForm: letzte 5 Auswärtsspiele des Gastteams {gf, ga}
-const MATCHES = [
+const MATCHES_BY_ST = {24: [
   {id:'fca-koe', home:'FCA',away:'KOE', kickoff:'Fr 27.02 · 20:30', p:{h:42.7,d:27.5,a:29.8},
    hForm:{gf:1.60,ga:1.40}, aForm:{gf:1.00,ga:1.80}},  // Augsburg solide heim, Köln schwach ausw
   {id:'lev-m05', home:'LEV',away:'M05', kickoff:'Sa 28.02 · 15:30', p:{h:56.5,d:23.2,a:20.3},
@@ -445,7 +445,7 @@ const MATCHES = [
    hForm:{gf:1.80,ga:1.80}, aForm:{gf:1.20,ga:2.20}},
   {id:'hsv-rbl', home:'HSV',away:'RBL', kickoff:'So 01.03 · 19:30', p:{h:29.7,d:25.8,a:44.5},
    hForm:{gf:1.40,ga:1.00}, aForm:{gf:1.60,ga:1.20}},  // Leipzig ausw. zuletzt solide
-];
+]};
 
 const DRAW_THRESHOLD = 0.30;       // Remis-Standardschwelle
 const DRAW_THRESHOLD_TIGHT = 0.27; // Abgesenkte Schwelle bei ausgeglichenen Spielen (|λH-λA| < 0.25)
@@ -621,12 +621,12 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
 function recalcAll(){
   // Schritt 1: Alle Spiele einzeln berechnen
   const raw = {};
-  MATCHES.forEach(m => { raw[m.id] = calcSingle(m.home, m.away, m.p, null, null, null, m.hForm, m.aForm); });
+  getMatches().forEach(m => { raw[m.id] = calcSingle(m.home, m.away, m.p, null, null, null, m.hForm, m.aForm); });
 
   // Schritt 2: Score-Monokultur-Schutz
   // Zähle wie oft jeder Score vorkommt
   const scoreCounts = {};
-  MATCHES.forEach(m => {
+  getMatches().forEach(m => {
     const t = raw[m.id].naturalTipp;
     if(t) scoreCounts[t] = (scoreCounts[t]||0) + 1;
   });
@@ -634,7 +634,7 @@ function recalcAll(){
   const finalTipps = {};
   const assignedCounts = {};
 
-  MATCHES.forEach(m => {
+  getMatches().forEach(m => {
     const r = raw[m.id];
     let tipp = r.naturalTipp;
     let adjusted = false;
@@ -690,8 +690,13 @@ function recalcAll(){
 // ─── RENDER ─────────────────────────────────────────────────────────────────
 function renderGames(){
   const grid = document.getElementById('gamesGrid');
+  const matches = getMatches();
+  if(!matches.length){
+    grid.innerHTML = `<div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.75rem;padding:40px 0;text-align:center">Für Spieltag ${currentSpieltag} sind noch keine Spieldaten hinterlegt.</div>`;
+    return;
+  }
   grid.innerHTML = '';
-  MATCHES.forEach(m => {
+  matches.forEach(m => {
     const r = results[m.id]; if(!r) return;
     const hN=NM[m.home]||m.home, aN=NM[m.away]||m.away;
     const hR=ST[m.home]?.rank||'-', aR=ST[m.away]?.rank||'-';
@@ -735,8 +740,13 @@ function renderGames(){
 
 function renderSummary(){
   const grid = document.getElementById('summaryGrid');
+  const matches = getMatches();
+  if(!matches.length){
+    grid.innerHTML = `<div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.75rem;padding:40px 0;text-align:center">Für Spieltag ${currentSpieltag} sind noch keine Spieldaten hinterlegt.</div>`;
+    return;
+  }
   const cc = {'cat-stable':'#3cff8f','cat-mid':'#ffb03c','cat-fifty':'#ff4d6a'};
-  grid.innerHTML = MATCHES.map(m => {
+  grid.innerHTML = matches.map(m => {
     const r = results[m.id]; if(!r) return '';
     return `<div class="sum-card">
 <div class="sum-dot" style="background:${cc[r.cc]||'#5a5a80'}"></div>
@@ -748,7 +758,7 @@ function renderSummary(){
 
 // ─── DETAIL PANEL ────────────────────────────────────────────────────────────
 function openDetail(id){
-  const m = MATCHES.find(x=>x.id===id), r = results[id];
+  const m = getMatches().find(x=>x.id===id), r = results[id];
   if(!m||!r) return;
   const hN=NM[m.home]||m.home, aN=NM[m.away]||m.away;
   const hw=r.wo==='H', dw=r.wo==='D', aw=r.wo==='A';
@@ -844,7 +854,7 @@ function showTab(id){
   if(id==='uebersicht') renderSummary();
 }
 function copyTipps(){
-  const lines = MATCHES.map(m=>`${NM[m.home]||m.home} – ${NM[m.away]||m.away}: ${results[m.id]?.tipp||'?'}`).join('\n');
+  const lines = getMatches().map(m=>`${NM[m.home]||m.home} – ${NM[m.away]||m.away}: ${results[m.id]?.tipp||'?'}`).join('\n');
   navigator.clipboard.writeText(lines).then(()=>alert('Tipps kopiert!'));
 }
 
@@ -948,6 +958,7 @@ const SPIELTAGE = Array.from({length:34},(_,i)=>{
 });
 
 let currentSpieltag = 24;
+function getMatches(){ return MATCHES_BY_ST[currentSpieltag] || []; }
 
 function renderSpieltageGrid(){
   const grid = document.getElementById('stGrid');
