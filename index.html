@@ -456,6 +456,7 @@ let strategy = 'safe';
 let mFH = [null,null,null,null,null];
 let mFA = [null,null,null,null,null];
 let results = {};
+let _dynST_map = {};
 
 // ─── POISSON ────────────────────────────────────────────────────────────────
 function pois(l,k){
@@ -476,8 +477,9 @@ function formScore(arr){
 const FORM_WEIGHT = 0.40;
 
 function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
-  const h = ST[hAbb]||{rank:9,hGF:1.3,hGA:1.4,aGF:1.3,aGA:1.4};
-  const a = ST[aAbb]||{rank:9,hGF:1.3,hGA:1.4,aGF:1.3,aGA:1.4};
+  const stData = _dynST_map[currentSpieltag] || ST;
+  const h = stData[hAbb]||ST[hAbb]||{rank:9,hGF:1.3,hGA:1.4,aGF:1.3,aGA:1.4};
+  const a = stData[aAbb]||ST[aAbb]||{rank:9,hGF:1.3,hGA:1.4,aGF:1.3,aGA:1.4};
 
   // Heim/Auswärts-Split + Formblending
   const effHGF = hForm ? (1-FORM_WEIGHT)*h.hGF + FORM_WEIGHT*hForm.gf : h.hGF;
@@ -699,7 +701,8 @@ function renderGames(){
   matches.forEach(m => {
     const r = results[m.id]; if(!r) return;
     const hN=NM[m.home]||m.home, aN=NM[m.away]||m.away;
-    const hR=ST[m.home]?.rank||'-', aR=ST[m.away]?.rank||'-';
+    const _st=_dynST_map[currentSpieltag]||ST;
+    const hR=_st[m.home]?.rank||'-', aR=_st[m.away]?.rank||'-';
     const hw=r.wo==='H', dw=r.wo==='D', aw=r.wo==='A';
     const c = document.createElement('div');
     c.className = 'game-card';
@@ -948,6 +951,129 @@ ${goalRuleApplied?`<div style="background:rgba(60,255,224,.08);border:1px solid 
 <div class="dp-scores-grid">${tops}</div>`;
 }
 
+// ─── OPENLIGADB API ──────────────────────────────────────────────────────────
+const OLDB_BASE = 'https://api.openligadb.de';
+const OLDB_LEAGUE = 'bl1';
+const OLDB_SEASON = '2025';
+const TEAM_CODE_MAP = {
+  'FC Bayern München':'BMU','Bayern München':'BMU',
+  'Borussia Dortmund':'BVB',
+  'TSG 1899 Hoffenheim':'TSG','TSG Hoffenheim':'TSG',
+  'VfB Stuttgart':'VFB',
+  'RB Leipzig':'RBL',
+  'Bayer 04 Leverkusen':'LEV','Bayer Leverkusen':'LEV',
+  'SC Freiburg':'SCF',
+  'Eintracht Frankfurt':'SGE',
+  '1. FC Union Berlin':'UNI','Union Berlin':'UNI',
+  'FC Augsburg':'FCA',
+  'Hamburger SV':'HSV',
+  '1. FC Köln':'KOE','FC Köln':'KOE',
+  '1. FSV Mainz 05':'M05','FSV Mainz 05':'M05','Mainz 05':'M05',
+  'Borussia Mönchengladbach':'BMG',
+  'VfL Wolfsburg':'WOB',
+  'FC St. Pauli':'STP',
+  'SV Werder Bremen':'SVW','Werder Bremen':'SVW',
+  '1. FC Heidenheim 1846':'FCH','1. FC Heidenheim':'FCH',
+};
+function resolveCode(t){ return TEAM_CODE_MAP[t.teamName]||TEAM_CODE_MAP[t.shortName]||null; }
+function getFinalGoals(m){
+  const r = m.matchResults?.find(x=>x.resultTypeID===2);
+  return r ? {g1:r.pointsTeam1, g2:r.pointsTeam2} : null;
+}
+
+let _seasonCache = null;
+async function fetchSeason(){
+  if(_seasonCache) return _seasonCache;
+  const r = await fetch(`${OLDB_BASE}/getmatchdata/${OLDB_LEAGUE}/${OLDB_SEASON}`);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  _seasonCache = await r.json();
+  return _seasonCache;
+}
+
+function buildDynST(all, beforeNr){
+  const acc = {};
+  all.forEach(m => {
+    if(m.group.groupOrderID >= beforeNr) return;
+    const res = getFinalGoals(m); if(!res) return;
+    const h = resolveCode(m.team1), a = resolveCode(m.team2);
+    if(!h||!a) return;
+    if(!acc[h]) acc[h]={hGF:0,hGA:0,hN:0,aGF:0,aGA:0,aN:0};
+    if(!acc[a]) acc[a]={hGF:0,hGA:0,hN:0,aGF:0,aGA:0,aN:0};
+    acc[h].hGF+=res.g1; acc[h].hGA+=res.g2; acc[h].hN++;
+    acc[a].aGF+=res.g2; acc[a].aGA+=res.g1; acc[a].aN++;
+  });
+  const out = {};
+  Object.entries(acc).forEach(([code,s])=>{
+    const base = ST[code]||{};
+    out[code]={
+      rank: base.rank||9,
+      hGF: s.hN>0 ? +(s.hGF/s.hN).toFixed(2) : (base.hGF||1.3),
+      hGA: s.hN>0 ? +(s.hGA/s.hN).toFixed(2) : (base.hGA||1.4),
+      aGF: s.aN>0 ? +(s.aGF/s.aN).toFixed(2) : (base.aGF||1.1),
+      aGA: s.aN>0 ? +(s.aGA/s.aN).toFixed(2) : (base.aGA||1.5),
+    };
+  });
+  return out;
+}
+
+function buildForm(all, code, beforeNr, home){
+  const prev = all
+    .filter(m=>{
+      if(m.group.groupOrderID>=beforeNr) return false;
+      const res=getFinalGoals(m); if(!res) return false;
+      return home ? resolveCode(m.team1)===code : resolveCode(m.team2)===code;
+    })
+    .sort((a,b)=>new Date(b.matchDateTimeUTC)-new Date(a.matchDateTimeUTC))
+    .slice(0,5);
+  if(!prev.length) return null;
+  let gf=0,ga=0;
+  prev.forEach(m=>{
+    const r=getFinalGoals(m);
+    if(home){gf+=r.g1;ga+=r.g2;}else{gf+=r.g2;ga+=r.g1;}
+  });
+  return {gf:+(gf/prev.length).toFixed(2), ga:+(ga/prev.length).toFixed(2)};
+}
+
+function fmtKickoff(utcStr){
+  if(!utcStr) return 'Zeit folgt';
+  const d = new Date(utcStr);
+  const days=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  return `${days[d.getDay()]} ${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+async function loadFromAPI(nr){
+  const muteStyle = "color:var(--muted2);font-family:'DM Mono',monospace;font-size:.72rem;padding:40px 0;text-align:center";
+  const errStyle  = "color:var(--red);font-family:'DM Mono',monospace;font-size:.72rem;padding:40px 0;text-align:center";
+  document.getElementById('gamesGrid').innerHTML =
+    `<div style="${muteStyle}">⏳ Lade Spieltag ${nr} von OpenLigaDB …</div>`;
+  try {
+    const all = await fetchSeason();
+    const stRaw = all.filter(m=>m.group.groupOrderID===nr);
+    if(!stRaw.length){
+      document.getElementById('gamesGrid').innerHTML =
+        `<div style="${muteStyle}">Spieltag ${nr}: Noch keine Daten von OpenLigaDB verfügbar.</div>`;
+      return;
+    }
+    _dynST_map[nr] = buildDynST(all, nr);
+    MATCHES_BY_ST[nr] = stRaw.map(m=>{
+      const hC=resolveCode(m.team1), aC=resolveCode(m.team2);
+      if(!hC||!aC) return null;
+      return {
+        id:`${hC.toLowerCase()}-${aC.toLowerCase()}-${nr}`,
+        home:hC, away:aC,
+        kickoff: fmtKickoff(m.matchDateTimeUTC||m.matchDateTime),
+        p: null,
+        hForm: buildForm(all, hC, nr, true),
+        aForm: buildForm(all, aC, nr, false),
+      };
+    }).filter(Boolean);
+    recalcAll();
+  } catch(e){
+    document.getElementById('gamesGrid').innerHTML =
+      `<div style="${errStyle}">❌ Fehler beim Laden: ${e.message}</div>`;
+  }
+}
+
 // ─── SPIELTAG DATA ───────────────────────────────────────────────────────────
 // Metadaten für alle 34 Spieltage der Saison 2025/26
 // status: 'past'=gespielt, 'current'=aktuell, 'future'=noch nicht gespielt
@@ -993,8 +1119,11 @@ function selectSpieltag(nr){
   });
 
   closeSpieltag();
-  // Neu berechnen mit aktiven Daten (nur Spieltag 24 hat echte Daten)
-  recalcAll();
+  if(MATCHES_BY_ST[nr]){
+    recalcAll();
+  } else {
+    loadFromAPI(nr);
+  }
 }
 
 function openSpieltag(){
