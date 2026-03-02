@@ -617,7 +617,6 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   const mc = marketCorrectNR(lH, lA, extP);
   lH = mc.lH; lA = mc.lA;
 
-  if(strategy === 'attack'){lH *= 1.07; lA *= 1.07;}
   lH = Math.max(.3, Math.min(4.5, lH));
   lA = Math.max(.3, Math.min(4.5, lA));
 
@@ -694,6 +693,27 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   }
   if(!naturalTipp) naturalTipp = rawTipp;
 
+  // ─── ANGRIFFSMODUS: mind. 2 Gesamttore ──────────────────────────────────
+  // Wenn der Tipp < 2 Gesamttore hat: nächstwahrscheinlichsten Score mit
+  // gleicher Richtung (wo) und ≥ 2 Toren suchen
+  let attackUpgraded = false;
+  if(strategy === 'attack' && naturalTipp){
+    const [nt_h, nt_a] = naturalTipp.split(':').map(Number);
+    if(nt_h + nt_a < 2){
+      for(const [s] of srt){
+        const [hi,ai] = s.split(':').map(Number);
+        const o = hi>ai?'H':hi<ai?'A':'D';
+        if(o !== wo) continue;
+        if(hi + ai < 2) continue;
+        if(needAwayGoal && ai===0) continue;
+        if(needHomeGoal && hi===0) continue;
+        naturalTipp = s;
+        attackUpgraded = true;
+        break;
+      }
+    }
+  }
+
   // Insights
   let ins = [];
   if(drawBlocked) ins.push(`⚠️ Remis gesperrt (X=${(pD*100).toFixed(0)}% < ${(effectiveDrawThreshold*100).toFixed(0)}%) → ${wo==='H'?'Heimsieg':'Auswärtssieg'}`);
@@ -701,11 +721,12 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   if(goalRuleApplied) ins.push(`⚽ Mindesttor: P(Gasttor≥1)=${(pAwayGoal*100).toFixed(0)}% ≥ 50% → ${rawTipp} verworfen`);
   if(favScoreRuleApplied) ins.push(`🔵 Favorit-Mindestscore: λ=${favLambda.toFixed(2)} ≥ ${FAV_MIN_GOALS_LAMBDA} → mind. 2 Tore erzwungen (${rawTipp} → ${naturalTipp})`);
   if(naturalTipp){const[th,ta]=naturalTipp.split(':').map(Number);if(th+ta>4)ins.push('⚠️ Hohe Torhöhe — Rückrunde beachten');}
-  if(strategy==='attack') ins.push('🔴 Angriffsmodus: Lambdas +7%');
+  if(attackUpgraded) ins.push(`🔴 Angriffsmodus: Score auf ≥2 Tore angehoben (${rawTipp} → ${naturalTipp})`);
+  else if(strategy==='attack') ins.push('🔴 Angriffsmodus aktiv (Score bereits ≥2 Gesamttore)');
   ins.push(`λ Heim ${lH.toFixed(2)} · Gast ${lA.toFixed(2)} · Dixon-Coles (ρ=${DC_RHO})`);
   if(extP) ins.push(`Markt: ${extP.h.toFixed(0)}% / ${extP.d.toFixed(0)}% / ${extP.a.toFixed(0)}% — NR-Korrektur ${mc.converged?'✓ konvergiert':'≈ approx'}`);
 
-  return {pH, pD, pA, naturalTipp, wo, cat, cc, srt, lH, lA, ins, fp, drawBlocked, goalRuleApplied, favScoreRuleApplied, pAwayGoal, pHomeGoal, effectiveDrawThreshold, lambdaDiff, h, a, effHGF, effHGA, effAGF, effAGA, formBlended: !!(hForm||aForm)};
+  return {pH, pD, pA, naturalTipp, wo, cat, cc, srt, lH, lA, ins, fp, drawBlocked, goalRuleApplied, favScoreRuleApplied, attackUpgraded, pAwayGoal, pHomeGoal, effectiveDrawThreshold, lambdaDiff, h, a, effHGF, effHGA, effAGF, effAGA, formBlended: !!(hForm||aForm)};
 }
 
 // ─── SPIELTAG-BERECHNUNG MIT MONOKULTUR-SCHUTZ ─────────────────────────────
@@ -1248,9 +1269,10 @@ function openInfo(){
     {name:'Mindesttor-Regel',          desc:'Kein 0-Tore-Tipp wenn P(mind. 1 Tor) ≥ 50%'},
     {name:'Favorit-Mindestscore',      desc:`Favorit muss ≥ 2 Tore im Tipp haben wenn λ_fav ≥ ${FAV_MIN_GOALS_LAMBDA}`},
     {name:'Monokultur-Schutz',         desc:`Gleicher Score max. ${MONO_MAX}× pro Spieltag — nächstbester Score als Alternative`},
+    ...(strategy==='attack'?[{name:'Angriffsmodus',desc:'Score wird auf mind. 2 Gesamttore angehoben falls wahrscheinlichster Tipp nur 0 oder 1 Tor hat'}]:[]),
   ];
   const stratLabel = strategy==='safe'?'🟢 Absichern':'🔴 Angreifen';
-  const stratDesc  = strategy==='attack'?'Lambdas +7% · höhere Torerwartung':'Standard-Prognose ohne Boost';
+  const stratDesc  = strategy==='attack'?'Score wird auf mind. 2 Gesamttore angehoben falls nötig':'Wahrscheinlichster Score ohne Einschränkung';
   document.getElementById('infoBody').innerHTML = `
     <div>
       <div class="info-section-title">Aktive Strategie</div>
