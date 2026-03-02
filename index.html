@@ -79,6 +79,34 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
 .strat-btn.safe{background:var(--green);color:#000;border-color:var(--green)}
 .strat-btn.attack{background:var(--red);color:#fff;border-color:var(--red)}
 
+/* VERSION + INFO-BUTTON */
+.ver-badge{font-family:'DM Mono',monospace;font-size:.48rem;color:var(--muted);background:var(--s2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;letter-spacing:.5px;margin-left:8px;vertical-align:middle;position:relative;top:-2px}
+.info-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;line-height:1}
+.info-btn:hover{border-color:var(--acc2);color:var(--acc2)}
+
+/* INFO-OVERLAY-MODAL */
+.info-overlay{position:fixed;inset:0;background:rgba(8,8,14,.82);z-index:400;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+.info-overlay.open{display:flex}
+.info-box{background:var(--s1);border:1px solid var(--border2);border-radius:12px;width:min(500px,94vw);max-height:84vh;overflow-y:auto}
+.info-box-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--border);gap:10px}
+.info-box-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:4px;color:var(--acc);flex:1}
+.info-box-ver{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--acc2);background:var(--s2);border:1px solid var(--border2);border-radius:4px;padding:2px 9px;letter-spacing:.5px}
+.info-close-btn{background:var(--s3);border:1px solid var(--border);color:var(--muted2);width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.info-close-btn:hover{border-color:var(--red);color:var(--red)}
+.info-body{padding:18px 20px 26px;display:flex;flex-direction:column;gap:18px}
+.info-section-title{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
+.info-strat-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.info-strat-desc{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--muted2)}
+.info-rules-list{display:flex;flex-direction:column;gap:5px}
+.info-rule{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;background:var(--s2);border:1px solid var(--border);border-radius:5px}
+.info-rule .ir-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:4px}
+.info-rule .ir-name{font-family:'DM Mono',monospace;font-size:.63rem;color:var(--text);font-weight:500}
+.info-rule .ir-desc{font-family:'DM Sans',sans-serif;font-size:.61rem;color:var(--muted2);margin-top:2px;line-height:1.4}
+.info-param-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.info-param{background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:7px 10px}
+.info-param .ip-key{font-family:'DM Mono',monospace;font-size:.53rem;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.info-param .ip-val{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:2px;color:var(--acc2);margin-top:2px}
+
 /* RULE INDICATORS */
 .rules-bar{padding:8px 32px;background:var(--s1);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;align-items:center}
 .rule-chip{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted2);text-transform:uppercase;letter-spacing:.8px}
@@ -124,8 +152,13 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
 .badge-draw-blocked.visible{display:inline-block}
 
 .gc-teams{padding:0 13px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.gc-team{display:flex;flex-direction:column;gap:2px;flex:1}
-.gc-team.away{text-align:right}
+.gc-team{display:flex;flex-direction:row;align-items:center;gap:8px;flex:1}
+.gc-team.away{flex-direction:row-reverse}
+.gc-team-info{display:flex;flex-direction:column;gap:2px;flex:1}
+.gc-team.away .gc-team-info{text-align:right}
+.team-logo-wrap{display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0}
+.team-logo{width:28px;height:28px;object-fit:contain;opacity:0;transition:opacity .2s;display:block}
+.team-logo-fb{display:flex;align-items:center;justify-content:center;width:28px;height:28px}
 .gc-teamname{font-weight:600;font-size:.88rem;color:var(--white)}
 .gc-rank{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--muted)}
 .gc-tipp{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:7px 11px;min-width:72px}
@@ -279,11 +312,12 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#3cffe0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#3cffe0"/>
       </svg>
-      <h1>BL Prognose</h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.2.0</span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
   <div class="header-right">
+    <button class="info-btn" onclick="openInfo()" title="Modell-Info &amp; aktive Regeln">ⓘ</button>
     <button class="st-header-btn" onclick="openSpieltag()">
       <span>Spieltag</span>
       <span class="st-num" id="stHeaderNum">24</span>
@@ -297,14 +331,15 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
   </div>
 </header>
 
-<div class="rules-bar">
-  <span class="rule-chip active"><span class="dot"></span>Heim/Auswärts-Split</span>
-  <span class="rule-chip active"><span class="dot"></span>Formblending (60% Saison / 40% letzte 5)</span>
-  <span class="rule-chip active"><span class="dot"></span>Score-Monokultur-Schutz (max 2×)</span>
-  <span class="rule-chip active"><span class="dot"></span>Remis-Härteregel (27–30% dynamisch)</span>
-  <span class="rule-chip active"><span class="dot"></span>Mindesttor-Regel (P≥50%)</span>
-  <span class="rule-chip active"><span class="dot"></span>Favorit-Mindestscore (λ≥2.0)</span>
-  <span class="rule-chip active"><span class="dot"></span>API-Marktkorrektur</span>
+<div class="info-overlay" id="infoOverlay" onclick="if(event.target===this)closeInfo()">
+  <div class="info-box">
+    <div class="info-box-head">
+      <span class="info-box-title">Modell-Übersicht</span>
+      <span class="info-box-ver" id="infoVer">v1.2.0</span>
+      <button class="info-close-btn" onclick="closeInfo()">✕</button>
+    </div>
+    <div class="info-body" id="infoBody"></div>
+  </div>
 </div>
 
 <div class="tabs">
@@ -421,6 +456,30 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
+const VERSION = 'v1.2.0';
+
+// Wikipedia-Commons-Logos (48px-Thumbnail, onerror → SVG-Badge-Fallback)
+const LOGOS = {
+  BMU:'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282002%E2%80%932017%29.svg/48px-FC_Bayern_M%C3%BCnchen_logo_%282002%E2%80%932017%29.svg.png',
+  BVB:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Borussia_Dortmund_logo.svg/48px-Borussia_Dortmund_logo.svg.png',
+  TSG:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/TSG_1899_Hoffenheim_logo.svg/48px-TSG_1899_Hoffenheim_logo.svg.png',
+  VFB:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/VfB_Stuttgart_Logo.svg/48px-VfB_Stuttgart_Logo.svg.png',
+  RBL:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/RB_Leipzig_2014_logo.svg/48px-RB_Leipzig_2014_logo.svg.png',
+  LEV:'https://upload.wikimedia.org/wikipedia/de/thumb/f/f7/Bayer_Leverkusen_logo.svg/48px-Bayer_Leverkusen_logo.svg.png',
+  SCF:'https://upload.wikimedia.org/wikipedia/de/thumb/0/00/SC_Freiburg.svg/48px-SC_Freiburg.svg.png',
+  SGE:'https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Eintracht_Frankfurt_Logo.svg/48px-Eintracht_Frankfurt_Logo.svg.png',
+  UNI:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/1._FC_Union_Berlin_Logo.svg/48px-1._FC_Union_Berlin_Logo.svg.png',
+  FCA:'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Logo_FC_Augsburg.svg/48px-Logo_FC_Augsburg.svg.png',
+  HSV:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Hamburger_SV_logo.svg/48px-Hamburger_SV_logo.svg.png',
+  KOE:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Logo_1._FC_K%C3%B6ln.svg/48px-Logo_1._FC_K%C3%B6ln.svg.png',
+  M05:'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Logo_FSV_Mainz_05.svg/48px-Logo_FSV_Mainz_05.svg.png',
+  BMG:'https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Borussia_M%C3%B6nchengladbach_logo.svg/48px-Borussia_M%C3%B6nchengladbach_logo.svg.png',
+  WOB:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Logo-VfL-Wolfsburg.svg/48px-Logo-VfL-Wolfsburg.svg.png',
+  STP:'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/FC_St._Pauli_logo.svg/48px-FC_St._Pauli_logo.svg.png',
+  SVW:'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/SV_Werder_Bremen_logo.svg/48px-SV_Werder_Bremen_logo.svg.png',
+  FCH:'https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/1_FC_Heidenheim_1846.svg/48px-1_FC_Heidenheim_1846.svg.png',
+};
+
 // Spieltag 24 mit API Win-Probabilities + aktuelle Heim/Auswärtsform (letzte 5 Spiele)
 // hForm: letzte 5 Heimspiele des Heimteams {gf, ga}
 // aForm: letzte 5 Auswärtsspiele des Gastteams {gf, ga}
@@ -469,6 +528,21 @@ function formScore(arr){
   let s=0,t=0;
   arr.forEach((v,i)=>{if(v!==null){s+=w[i]*(v==='w'?1:v==='d'?.4:0);t+=w[i];}});
   return t>0?s/t:.5;
+}
+
+// SVG-Fallback-Badge mit Vereinsfarbe + Kürzel
+function teamBadge(code){
+  const bg={BMU:'#dc052d',BVB:'#fde100',TSG:'#1961ae',VFB:'#e32219',RBL:'#dd0741',
+    LEV:'#e32219',SCF:'#151515',SGE:'#e1000f',UNI:'#d30024',FCA:'#ba3733',
+    HSV:'#0072bc',KOE:'#fc1b28',M05:'#c8102e',BMG:'#151515',WOB:'#5a9e00',
+    STP:'#5c2d82',SVW:'#1d9948',FCH:'#003b7a'}[code]||'#333';
+  const fg={BVB:'#000',WOB:'#fff'}[code]||'#fff';
+  return `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"><rect width="28" height="28" rx="5" fill="${bg}"/><text x="14" y="19.5" font-family="'DM Mono',monospace" font-size="8" fill="${fg}" text-anchor="middle" font-weight="700">${code}</text></svg>`;
+}
+// Logo-Wrapper: zuerst Badge sichtbar, bei erfolgreichem Laden des Bildes → Badge ausblenden
+function teamLogoHtml(code){
+  const url=LOGOS[code]||'';
+  return `<span class="team-logo-wrap"><span class="team-logo-fb">${teamBadge(code)}</span>${url?`<img class="team-logo" src="${url}" alt="${code}" loading="lazy" onload="this.style.opacity=1;this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">`:''}</span>`;
 }
 
 // ─── DIXON-COLES-KORREKTUR ───────────────────────────────────────────────────
@@ -753,16 +827,22 @@ function renderGames(){
 </div>
 <div class="gc-teams">
   <div class="gc-team">
-    <div class="gc-teamname">${hN}</div>
-    <div class="gc-rank">#${hR}</div>
+    ${teamLogoHtml(m.home)}
+    <div class="gc-team-info">
+      <div class="gc-teamname">${hN}</div>
+      <div class="gc-rank">#${hR}</div>
+    </div>
   </div>
   <div class="gc-tipp">
     <div class="gc-tipp-score">${r.tipp}</div>
     <div class="gc-tipp-lbl">Tipp</div>
   </div>
   <div class="gc-team away">
-    <div class="gc-teamname">${aN}</div>
-    <div class="gc-rank">#${aR}</div>
+    <div class="gc-team-info">
+      <div class="gc-teamname">${aN}</div>
+      <div class="gc-rank">#${aR}</div>
+    </div>
+    ${teamLogoHtml(m.away)}
   </div>
 </div>
 <div class="gc-probs">
@@ -1175,6 +1255,54 @@ function closeSpieltag(){
 document.getElementById('spieltagSelector').addEventListener('click', e=>{
   if(e.target === document.getElementById('spieltagSelector')) closeSpieltag();
 });
+
+// ─── INFO-MODAL ──────────────────────────────────────────────────────────────
+function openInfo(){
+  const rules = [
+    {name:'Heim/Auswärts-Split',       desc:'Separate Heim- und Auswärtsstatistiken (hGF/hGA vs aGF/aGA)'},
+    {name:'Formblending',              desc:`${((1-FORM_WEIGHT)*100).toFixed(0)}% Saisondurchschnitt + ${(FORM_WEIGHT*100).toFixed(0)}% aktuelle Form (letzte 5 Spiele)`},
+    {name:'Dixon-Coles-Korrektur',     desc:`Niedrigzahl-Scores 0:0–1:1 systematisch korrigiert (ρ = ${DC_RHO})`},
+    {name:'Newton-Raphson-Marktkorrektur', desc:'λH / λA numerisch auf Wettmarkt-Quoten kalibriert (≤ 12 Iterationen, Konvergenz < 0,2 pp)'},
+    {name:'Remis-Härteregel',          desc:`Remis gesperrt wenn P(X) < ${(DRAW_THRESHOLD_TIGHT*100).toFixed(0)}–${(DRAW_THRESHOLD*100).toFixed(0)}% (dynamisch nach λ-Abstand)`},
+    {name:'Mindesttor-Regel',          desc:'Kein 0-Tore-Tipp wenn P(mind. 1 Tor) ≥ 50%'},
+    {name:'Favorit-Mindestscore',      desc:`Favorit muss ≥ 2 Tore im Tipp haben wenn λ_fav ≥ ${FAV_MIN_GOALS_LAMBDA}`},
+    {name:'Monokultur-Schutz',         desc:`Gleicher Score max. ${MONO_MAX}× pro Spieltag — nächstbester Score als Alternative`},
+  ];
+  const stratLabel = strategy==='safe'?'🟢 Absichern':'🔴 Angreifen';
+  const stratDesc  = strategy==='attack'?'Lambdas +7% · höhere Torerwartung':'Standard-Prognose ohne Boost';
+  document.getElementById('infoBody').innerHTML = `
+    <div>
+      <div class="info-section-title">Aktive Strategie</div>
+      <div class="info-strat-row">
+        <span class="strat-btn ${strategy}" style="pointer-events:none;cursor:default">${stratLabel}</span>
+        <span class="info-strat-desc">${stratDesc}</span>
+      </div>
+    </div>
+    <div>
+      <div class="info-section-title">Aktive Regeln</div>
+      <div class="info-rules-list">${rules.map(r=>`
+        <div class="info-rule"><span class="ir-dot"></span><div>
+          <div class="ir-name">${r.name}</div>
+          <div class="ir-desc">${r.desc}</div>
+        </div></div>`).join('')}
+      </div>
+    </div>
+    <div>
+      <div class="info-section-title">Modell-Parameter</div>
+      <div class="info-param-grid">
+        <div class="info-param"><div class="ip-key">Dixon-Coles ρ</div><div class="ip-val">${DC_RHO}</div></div>
+        <div class="info-param"><div class="ip-key">Form-Gewicht</div><div class="ip-val">${(FORM_WEIGHT*100).toFixed(0)}%</div></div>
+        <div class="info-param"><div class="ip-key">Remis-Schwelle</div><div class="ip-val">${(DRAW_THRESHOLD*100).toFixed(0)}%</div></div>
+        <div class="info-param"><div class="ip-key">Monokultur max.</div><div class="ip-val">${MONO_MAX}×</div></div>
+        <div class="info-param"><div class="ip-key">Favorit min. λ</div><div class="ip-val">${FAV_MIN_GOALS_LAMBDA}</div></div>
+        <div class="info-param"><div class="ip-key">Marktkorrektur</div><div class="ip-val">N-R</div></div>
+      </div>
+    </div>`;
+  document.getElementById('infoOverlay').classList.add('open');
+}
+function closeInfo(){
+  document.getElementById('infoOverlay').classList.remove('open');
+}
 
 // ─── SPLASH ──────────────────────────────────────────────────────────────────
 function initApp(){
