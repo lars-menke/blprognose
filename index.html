@@ -471,10 +471,64 @@ function formScore(arr){
   return t>0?s/t:.5;
 }
 
+// ─── DIXON-COLES-KORREKTUR ───────────────────────────────────────────────────
+// Korrigiert die systematische Unter-/Überschätzung von Niedrigzahl-Scores
+// durch das unabhängige Poisson-Modell (Dixon & Coles, 1997)
+function dcTau(x, y, lH, lA){
+  if(x===0&&y===0) return 1 - lH*lA*DC_RHO;
+  if(x===0&&y===1) return 1 + lH*DC_RHO;
+  if(x===1&&y===0) return 1 + lA*DC_RHO;
+  if(x===1&&y===1) return 1 - DC_RHO;
+  return 1;
+}
+
+// Baut die vollständige Score-Matrix mit DC-Korrektur und Normalisierung
+function poisMatrix(lH, lA){
+  const M=7, sc={};
+  let tot=0;
+  for(let h=0;h<=M;h++) for(let a=0;a<=M;a++){
+    const p = pois(lH,h)*pois(lA,a)*dcTau(h,a,lH,lA);
+    sc[`${h}:${a}`]=p; tot+=p;
+  }
+  let pH=0, pD=0, pA=0;
+  for(const k in sc){
+    sc[k]/=tot;
+    const[h,a]=k.split(':').map(Number);
+    if(h>a) pH+=sc[k]; else if(h===a) pD+=sc[k]; else pA+=sc[k];
+  }
+  return {sc, pH, pD, pA};
+}
+
+// ─── MARKTKORREKTUR (NEWTON-RAPHSON) ────────────────────────────────────────
+// Optimiert lH und lA numerisch so, dass die Poisson-Wahrscheinlichkeiten
+// exakt auf die Wettmarkt-Quoten konvergieren (statt grober Faustregeln)
+function marketCorrectNR(lH0, lA0, extP, iter=12){
+  if(!extP) return {lH:lH0, lA:lA0, converged:false};
+  const tH=extP.h/100, tA=extP.a/100;
+  let lH=lH0, lA=lA0;
+  const eps=0.01, damp=0.5;
+  for(let i=0;i<iter;i++){
+    const c=poisMatrix(lH,lA);
+    const eH=tH-c.pH, eA=tA-c.pA;
+    if(Math.abs(eH)<0.002&&Math.abs(eA)<0.002) return {lH,lA,converged:true};
+    // Jakobimatrix via finite differences
+    const dh=poisMatrix(lH+eps,lA), da=poisMatrix(lH,lA+eps);
+    const j00=(dh.pH-c.pH)/eps, j01=(da.pH-c.pH)/eps;
+    const j10=(dh.pA-c.pA)/eps, j11=(da.pA-c.pA)/eps;
+    const det=j00*j11-j01*j10;
+    if(Math.abs(det)<1e-6) break;
+    // Gedämpftes Newton-Raphson-Update
+    lH=Math.max(.3,Math.min(4.5, lH + damp*(j11*eH-j01*eA)/det));
+    lA=Math.max(.3,Math.min(4.5, lA + damp*(-j10*eH+j00*eA)/det));
+  }
+  return {lH,lA,converged:false};
+}
+
 // ─── KERN-BERECHNUNG (EINZELSPIEL) ──────────────────────────────────────────
 // hForm/aForm: {gf, ga} aus letzten 5 Heim- bzw. Auswärtsspielen (optional)
 // Blending: 60% Saisonnorm + 40% aktuelle Form
 const FORM_WEIGHT = 0.40;
+const DC_RHO = -0.13;   // Dixon-Coles Korrelationsparameter (Niedrigzahl-Korrektur)
 
 function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   const stData = _dynST_map[currentSpieltag] || ST;
@@ -502,38 +556,18 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   lH *= (0.6 + 0.4 * (0.6 + 0.8*scH));
   lA *= (0.6 + 0.4 * (0.6 + 0.8*scA));
 
-  // API Marktkorrektur
-  if(extP){
-    // Basis-Korrektur: klarer API-Favorit (>50%) aber Modell sieht es anders
-    if(extP.a > 50 && lA < lH) lA *= 1.14;
-    if(extP.h > 55 && lH < lA) lH *= 1.14;
-    // Stärkere Korrektur: wenn API-Lead > 8pp aber Favorit noch unter 50%
-    // (z.B. API: 44.5% Auswärts vs 29.7% Heim → klares Signal das Modell ignoriert)
-    const apiLeadA = extP.a - extP.h;
-    const apiLeadH = extP.h - extP.a;
-    if(apiLeadA > 8 && lH > lA) lA *= 1.22;
-    if(apiLeadH > 8 && lA > lH) lH *= 1.22;
-    // Wenn Ratio zwischen API und Poisson stark abweicht — leichte Annäherung
-    const apiRatio = extP.h / (extP.a||1);
-    const poisRatio = lH / (lA||.01);
-    if(Math.abs(apiRatio - poisRatio) > 1.5){
-      lH = lH * 0.85 + (apiRatio > poisRatio ? lH*0.15 : 0);
-      lA = lA * 0.85 + (apiRatio < poisRatio ? lA*0.15 : 0);
-    }
-  }
+  // Marktkorrektur: Newton-Raphson (Regel 5)
+  lH = Math.max(.3, Math.min(4.5, lH));
+  lA = Math.max(.3, Math.min(4.5, lA));
+  const mc = marketCorrectNR(lH, lA, extP);
+  lH = mc.lH; lA = mc.lA;
 
   if(strategy === 'attack'){lH *= 1.07; lA *= 1.07;}
-
   lH = Math.max(.3, Math.min(4.5, lH));
   lA = Math.max(.3, Math.min(4.5, lA));
 
-  // Score-Matrix
-  const M=7; let sc={}; let pH=0,pD=0,pA=0;
-  for(let hi=0;hi<=M;hi++) for(let ai=0;ai<=M;ai++){
-    const p = pois(lH,hi)*pois(lA,ai);
-    sc[`${hi}:${ai}`] = p;
-    if(hi>ai) pH+=p; else if(hi===ai) pD+=p; else pA+=p;
-  }
+  // Score-Matrix mit Dixon-Coles-Korrektur
+  const {sc, pH, pD, pA} = poisMatrix(lH, lA);
   const srt = Object.entries(sc).sort((a,b)=>b[1]-a[1]);
 
   // ─── REGEL 1: REMIS-HÄRTEREGEL (dynamische Schwelle) ────────────────────
@@ -613,8 +647,8 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   if(favScoreRuleApplied) ins.push(`🔵 Favorit-Mindestscore: λ=${favLambda.toFixed(2)} ≥ ${FAV_MIN_GOALS_LAMBDA} → mind. 2 Tore erzwungen (${rawTipp} → ${naturalTipp})`);
   if(naturalTipp){const[th,ta]=naturalTipp.split(':').map(Number);if(th+ta>4)ins.push('⚠️ Hohe Torhöhe — Rückrunde beachten');}
   if(strategy==='attack') ins.push('🔴 Angriffsmodus: Lambdas +7%');
-  ins.push(`λ Heim ${lH.toFixed(2)} · Gast ${lA.toFixed(2)}`);
-  if(extP) ins.push(`API: ${extP.h.toFixed(0)}% / ${extP.d.toFixed(0)}% / ${extP.a.toFixed(0)}%`);
+  ins.push(`λ Heim ${lH.toFixed(2)} · Gast ${lA.toFixed(2)} · Dixon-Coles (ρ=${DC_RHO})`);
+  if(extP) ins.push(`Markt: ${extP.h.toFixed(0)}% / ${extP.d.toFixed(0)}% / ${extP.a.toFixed(0)}% — NR-Korrektur ${mc.converged?'✓ konvergiert':'≈ approx'}`);
 
   return {pH, pD, pA, naturalTipp, wo, cat, cc, srt, lH, lA, ins, fp, drawBlocked, goalRuleApplied, favScoreRuleApplied, pAwayGoal, pHomeGoal, effectiveDrawThreshold, lambdaDiff, h, a, effHGF, effHGA, effAGF, effAGA, formBlended: !!(hForm||aForm)};
 }
