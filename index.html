@@ -312,7 +312,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#3cffe0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#3cffe0"/>
       </svg>
-      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.2.2</span></h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.2.3</span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
@@ -335,7 +335,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
   <div class="info-box">
     <div class="info-box-head">
       <span class="info-box-title">Modell-Übersicht</span>
-      <span class="info-box-ver" id="infoVer">v1.2.2</span>
+      <span class="info-box-ver" id="infoVer">v1.2.3</span>
       <button class="info-close-btn" onclick="closeInfo()">✕</button>
     </div>
     <div class="info-body" id="infoBody"></div>
@@ -456,7 +456,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.2.2';
+const VERSION = 'v1.2.3';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -693,25 +693,24 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   }
   if(!naturalTipp) naturalTipp = rawTipp;
 
-  // ─── ANGRIFFSMODUS: mind. 3 Gesamttore ──────────────────────────────────
-  // Wenn der Tipp < 3 Gesamttore hat: nächstwahrscheinlichsten Score mit
-  // gleicher Richtung (wo) und ≥ 3 Toren suchen
-  // (< 2 greift kaum, da 1:1/2:1 schon ≥ 2 Tore haben)
+  // ─── ANGRIFFSMODUS: immer +1 Tor gegenüber sicherem Tipp ─────────────────
+  // Sucht den wahrscheinlichsten Score mit gleicher Richtung (wo)
+  // und mindestens (naturalTipp_total + 1) Gesamttoren.
+  // Garantiert immer einen sichtbaren Unterschied zu Absichern.
   let attackUpgraded = false;
   if(strategy === 'attack' && naturalTipp){
     const [nt_h, nt_a] = naturalTipp.split(':').map(Number);
-    if(nt_h + nt_a < 3){
-      for(const [s] of srt){
-        const [hi,ai] = s.split(':').map(Number);
-        const o = hi>ai?'H':hi<ai?'A':'D';
-        if(o !== wo) continue;
-        if(hi + ai < 3) continue;
-        if(needAwayGoal && ai===0) continue;
-        if(needHomeGoal && hi===0) continue;
-        naturalTipp = s;
-        attackUpgraded = true;
-        break;
-      }
+    const targetTotal = nt_h + nt_a + 1;
+    for(const [s] of srt){
+      const [hi,ai] = s.split(':').map(Number);
+      const o = hi>ai?'H':hi<ai?'A':'D';
+      if(o !== wo) continue;
+      if(hi + ai < targetTotal) continue;
+      if(needAwayGoal && ai===0) continue;
+      if(needHomeGoal && hi===0) continue;
+      naturalTipp = s;
+      attackUpgraded = true;
+      break;
     }
   }
 
@@ -722,8 +721,8 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   if(goalRuleApplied) ins.push(`⚽ Mindesttor: P(Gasttor≥1)=${(pAwayGoal*100).toFixed(0)}% ≥ 50% → ${rawTipp} verworfen`);
   if(favScoreRuleApplied) ins.push(`🔵 Favorit-Mindestscore: λ=${favLambda.toFixed(2)} ≥ ${FAV_MIN_GOALS_LAMBDA} → mind. 2 Tore erzwungen (${rawTipp} → ${naturalTipp})`);
   if(naturalTipp){const[th,ta]=naturalTipp.split(':').map(Number);if(th+ta>4)ins.push('⚠️ Hohe Torhöhe — Rückrunde beachten');}
-  if(attackUpgraded) ins.push(`🔴 Angriffsmodus: Score auf ≥3 Tore angehoben (${rawTipp} → ${naturalTipp})`);
-  else if(strategy==='attack') ins.push('🔴 Angriffsmodus aktiv (Score bereits ≥3 Gesamttore)');
+  if(attackUpgraded) ins.push(`🔴 Angriffsmodus: Score um 1 Tor erhöht (${rawTipp} → ${naturalTipp})`);
+  else if(strategy==='attack') ins.push('🔴 Angriffsmodus: kein höherer Score mit gleicher Richtung verfügbar');
   ins.push(`λ Heim ${lH.toFixed(2)} · Gast ${lA.toFixed(2)} · Dixon-Coles (ρ=${DC_RHO})`);
   if(extP) ins.push(`Markt: ${extP.h.toFixed(0)}% / ${extP.d.toFixed(0)}% / ${extP.a.toFixed(0)}% — NR-Korrektur ${mc.converged?'✓ konvergiert':'≈ approx'}`);
 
@@ -1270,10 +1269,10 @@ function openInfo(){
     {name:'Mindesttor-Regel',          desc:'Kein 0-Tore-Tipp wenn P(mind. 1 Tor) ≥ 50%'},
     {name:'Favorit-Mindestscore',      desc:`Favorit muss ≥ 2 Tore im Tipp haben wenn λ_fav ≥ ${FAV_MIN_GOALS_LAMBDA}`},
     {name:'Monokultur-Schutz',         desc:`Gleicher Score max. ${MONO_MAX}× pro Spieltag — nächstbester Score als Alternative`},
-    ...(strategy==='attack'?[{name:'Angriffsmodus',desc:'Score wird auf mind. 3 Gesamttore angehoben — betrifft z.B. 1:1 → 2:1, 2:0 → 3:0, 1:0 → 2:1'}]:[]),
+    ...(strategy==='attack'?[{name:'Angriffsmodus',desc:'Immer +1 Gesamttor gegenüber Absichern-Modus — z.B. 2:1 → 3:1, 1:0 → 2:0, 1:1 → 2:2'}]:[]),
   ];
   const stratLabel = strategy==='safe'?'🟢 Absichern':'🔴 Angreifen';
-  const stratDesc  = strategy==='attack'?'Score wird auf mind. 3 Gesamttore angehoben falls nötig (1:1 → 2:1, 2:0 → 3:0 usw.)':'Wahrscheinlichster Score ohne Einschränkung';
+  const stratDesc  = strategy==='attack'?'Immer +1 Gesamttor gegenüber Absichern (2:1 → 3:1, 1:0 → 2:0, 1:1 → 2:2)':'Wahrscheinlichster Score ohne Einschränkung';
   document.getElementById('infoBody').innerHTML = `
     <div>
       <div class="info-section-title">Aktive Strategie</div>
