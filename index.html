@@ -73,11 +73,6 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
 .logo h1{font-family:'Bebas Neue',sans-serif;font-size:2.1rem;letter-spacing:5px;color:var(--acc);line-height:1}
 .logo .sub{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;padding-left:calc(2.1rem + 9px)}
 .header-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.strat{display:flex;gap:5px;align-items:center}
-.strat-lbl{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-.strat-btn{padding:5px 13px;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:.66rem;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:1px}
-.strat-btn.safe{background:var(--green);color:#000;border-color:var(--green)}
-.strat-btn.attack{background:var(--red);color:#fff;border-color:var(--red)}
 
 /* VERSION + INFO-BUTTON */
 .ver-badge{font-family:'DM Mono',monospace;font-size:.48rem;color:var(--muted);background:var(--s2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;letter-spacing:.5px;margin-left:8px;vertical-align:middle;position:relative;top:-2px}
@@ -95,8 +90,6 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
 .info-close-btn:hover{border-color:var(--red);color:var(--red)}
 .info-body{padding:18px 20px 26px;display:flex;flex-direction:column;gap:18px}
 .info-section-title{font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px}
-.info-strat-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.info-strat-desc{font-family:'DM Mono',monospace;font-size:.61rem;color:var(--muted2)}
 .info-rules-list{display:flex;flex-direction:column;gap:5px}
 .info-rule{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;background:var(--s2);border:1px solid var(--border);border-radius:5px}
 .info-rule .ir-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:4px}
@@ -312,7 +305,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#3cffe0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#3cffe0"/>
       </svg>
-      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.2.5</span></h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.3.0</span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
@@ -323,11 +316,6 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
       <span class="st-num" id="stHeaderNum">24</span>
       <span style="color:var(--muted);font-size:.7rem">▾</span>
     </button>
-    <div class="strat">
-      <span class="strat-lbl">Modus:</span>
-      <button class="strat-btn safe" id="btnSafe" onclick="setStrategy('safe')">🟢 Absichern</button>
-      <button class="strat-btn" id="btnAttack" onclick="setStrategy('attack')">🔴 Angreifen</button>
-    </div>
   </div>
 </header>
 
@@ -335,7 +323,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
   <div class="info-box">
     <div class="info-box-head">
       <span class="info-box-title">Modell-Übersicht</span>
-      <span class="info-box-ver" id="infoVer">v1.2.5</span>
+      <span class="info-box-ver" id="infoVer">v1.3.0</span>
       <button class="info-close-btn" onclick="closeInfo()">✕</button>
     </div>
     <div class="info-body" id="infoBody"></div>
@@ -456,7 +444,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.2.5';
+const VERSION = 'v1.3.0';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -492,7 +480,6 @@ const DRAW_THRESHOLD_TIGHT = 0.27; // Abgesenkte Schwelle bei ausgeglichenen Spi
 const MONO_MAX = 2;                // Score darf max. 2× vergeben werden
 const FAV_MIN_GOALS_LAMBDA = 2.0;  // Ab dieser λ muss Favorit mind. 2 Tore im Score haben
 
-let strategy = 'safe';
 let mFH = [null,null,null,null,null];
 let mFA = [null,null,null,null,null];
 let results = {};
@@ -693,40 +680,6 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   }
   if(!naturalTipp) naturalTipp = rawTipp;
 
-  // ─── ANGRIFFSMODUS: Kein Remis, Sieger trifft ein Tor mehr ───────────────
-  // Aggressive Strategie: immer einen Sieger tippen (nie Remis) und der
-  // Sieger trifft mindestens ein Tor mehr als im sicheren Tipp.
-  // 2:1 → 3:1 · 1:0 → 2:0 · 1:1 (Remis) → 2:1
-  let attackUpgraded = false;
-  if(strategy === 'attack'){
-    const attackWo = pH >= pA ? 'H' : 'A';  // immer Sieger, kein Remis
-
-    // Wie viele Tore hatte der Sieger im sicheren Tipp?
-    let safeWinnerGoals = 1;
-    if(naturalTipp){
-      const [nh, na] = naturalTipp.split(':').map(Number);
-      safeWinnerGoals = attackWo === 'H' ? nh : na;
-    }
-    const minWinnerGoals = safeWinnerGoals + 1;
-
-    const safeTipp = naturalTipp;
-    const safeWo   = wo;
-    for(const [s] of srt){
-      const [hi,ai] = s.split(':').map(Number);
-      const o = hi>ai?'H':hi<ai?'A':'D';
-      if(o !== attackWo) continue;
-      if(attackWo === 'H' && hi < minWinnerGoals) continue;
-      if(attackWo === 'A' && ai < minWinnerGoals) continue;
-      naturalTipp = s;
-      wo          = attackWo;
-      drawBlocked        = false;
-      goalRuleApplied    = false;
-      favScoreRuleApplied = false;
-      attackUpgraded = (naturalTipp !== safeTipp || wo !== safeWo);
-      break;
-    }
-  }
-
   // Insights
   let ins = [];
   if(drawBlocked) ins.push(`⚠️ Remis gesperrt (X=${(pD*100).toFixed(0)}% < ${(effectiveDrawThreshold*100).toFixed(0)}%) → ${wo==='H'?'Heimsieg':'Auswärtssieg'}`);
@@ -734,14 +687,10 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   if(goalRuleApplied) ins.push(`⚽ Mindesttor: P(Gasttor≥1)=${(pAwayGoal*100).toFixed(0)}% ≥ 50% → ${rawTipp} verworfen`);
   if(favScoreRuleApplied) ins.push(`🔵 Favorit-Mindestscore: λ=${favLambda.toFixed(2)} ≥ ${FAV_MIN_GOALS_LAMBDA} → mind. 2 Tore erzwungen (${rawTipp} → ${naturalTipp})`);
   if(naturalTipp){const[th,ta]=naturalTipp.split(':').map(Number);if(th+ta>4)ins.push('⚠️ Hohe Torhöhe — Rückrunde beachten');}
-  if(strategy==='attack'){
-    if(attackUpgraded) ins.push(`🔴 Angriffsmodus: Kein Remis · Sieger +1 Tor (${naturalTipp})`);
-    else ins.push(`🔴 Angriffsmodus: Kein Sieger-Upgrade möglich — behalte ${naturalTipp}`);
-  }
   ins.push(`λ Heim ${lH.toFixed(2)} · Gast ${lA.toFixed(2)} · Dixon-Coles (ρ=${DC_RHO})`);
   if(extP) ins.push(`Markt: ${extP.h.toFixed(0)}% / ${extP.d.toFixed(0)}% / ${extP.a.toFixed(0)}% — NR-Korrektur ${mc.converged?'✓ konvergiert':'≈ approx'}`);
 
-  return {pH, pD, pA, naturalTipp, wo, cat, cc, srt, lH, lA, ins, fp, drawBlocked, goalRuleApplied, favScoreRuleApplied, attackUpgraded, pAwayGoal, pHomeGoal, effectiveDrawThreshold, lambdaDiff, h, a, effHGF, effHGA, effAGF, effAGA, formBlended: !!(hForm||aForm)};
+  return {pH, pD, pA, naturalTipp, wo, cat, cc, srt, lH, lA, ins, fp, drawBlocked, goalRuleApplied, favScoreRuleApplied, pAwayGoal, pHomeGoal, effectiveDrawThreshold, lambdaDiff, h, a, effHGF, effHGA, effAGF, effAGA, formBlended: !!(hForm||aForm)};
 }
 
 // ─── SPIELTAG-BERECHNUNG MIT MONOKULTUR-SCHUTZ ─────────────────────────────
@@ -971,13 +920,6 @@ function closeDetail(){
   document.getElementById('overlay').classList.remove('active');
 }
 
-// ─── CONTROLS ───────────────────────────────────────────────────────────────
-function setStrategy(s){
-  strategy = s;
-  document.getElementById('btnSafe').className = 'strat-btn'+(s==='safe'?' safe':'');
-  document.getElementById('btnAttack').className = 'strat-btn'+(s==='attack'?' attack':'');
-  recalcAll();
-}
 function showTab(id){
   document.querySelectorAll('.tab').forEach((t,i)=>{
     const ts=['spieltag','uebersicht','manuell'];
@@ -1024,7 +966,6 @@ function manualCalc(){
   lH *= (0.6+0.4*(0.6+0.8*scH));
   lA *= (0.6+0.4*(0.6+0.8*scA));
   lH *= (1-bel*.12);
-  if(strategy==='attack'){lH*=1.07;lA*=1.07;}
   lH=Math.max(.3,Math.min(4.5,lH));lA=Math.max(.3,Math.min(4.5,lA));
 
   const M=7; let sc={}; let pH=0,pD=0,pA=0;
@@ -1284,18 +1225,8 @@ function openInfo(){
     {name:'Mindesttor-Regel',          desc:'Kein 0-Tore-Tipp wenn P(mind. 1 Tor) ≥ 50%'},
     {name:'Favorit-Mindestscore',      desc:`Favorit muss ≥ 2 Tore im Tipp haben wenn λ_fav ≥ ${FAV_MIN_GOALS_LAMBDA}`},
     {name:'Monokultur-Schutz',         desc:`Gleicher Score max. ${MONO_MAX}× pro Spieltag — nächstbester Score als Alternative`},
-    ...(strategy==='attack'?[{name:'Angriffsmodus',desc:'Kein Remis — immer einen Sieger tippen. Sieger muss mind. 1 Tor mehr als im sicheren Tipp erzielen. 2:1 → 3:1 · 1:1 → 2:1 · 1:0 → 2:0'}]:[]),
   ];
-  const stratLabel = strategy==='safe'?'🟢 Absichern':'🔴 Angreifen';
-  const stratDesc  = strategy==='attack'?'Kein Remis — immer Sieger tippen, Sieger trifft +1 Tor gegenüber Absichern':'Wahrscheinlichster Score in der wahrscheinlichsten Tendenz (H/D/A) nach Regelfilter';
   document.getElementById('infoBody').innerHTML = `
-    <div>
-      <div class="info-section-title">Aktive Strategie</div>
-      <div class="info-strat-row">
-        <span class="strat-btn ${strategy}" style="pointer-events:none;cursor:default">${stratLabel}</span>
-        <span class="info-strat-desc">${stratDesc}</span>
-      </div>
-    </div>
     <div>
       <div class="info-section-title">Aktive Regeln</div>
       <div class="info-rules-list">${rules.map(r=>`
