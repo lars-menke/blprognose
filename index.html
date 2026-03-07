@@ -305,7 +305,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#3cffe0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#3cffe0"/>
       </svg>
-      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.3.2</span></h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.3.3</span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
@@ -323,7 +323,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
   <div class="info-box">
     <div class="info-box-head">
       <span class="info-box-title">Modell-Übersicht</span>
-      <span class="info-box-ver" id="infoVer">v1.3.2</span>
+      <span class="info-box-ver" id="infoVer">v1.3.3</span>
       <button class="info-close-btn" onclick="closeInfo()">✕</button>
     </div>
     <div class="info-body" id="infoBody"></div>
@@ -444,7 +444,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.3.2';
+const VERSION = 'v1.3.3';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -1148,15 +1148,24 @@ async function loadFromAPI(nr){
 
 // ─── SPIELTAG DATA ───────────────────────────────────────────────────────────
 // Metadaten für alle 34 Spieltage der Saison 2025/26
-// status: 'past'=gespielt, 'current'=aktuell, 'future'=noch nicht gespielt
+// Wenn alle Kickoffs des letzten eingetragenen Spieltags in der Vergangenheit
+// liegen, wird automatisch auf den nächsten Spieltag weitergeschaltet.
 const _latestST = Math.max(...Object.keys(MATCHES_BY_ST).map(Number));
+const _allPlayed = (MATCHES_BY_ST[_latestST]||[]).every(m => {
+  const mm = m.kickoff.match(/(\d{2})\.(\d{2})/);
+  if(!mm) return false;
+  const mon = parseInt(mm[2]), day = parseInt(mm[1]);
+  const year = mon >= 8 ? 2025 : 2026;
+  return new Date(year, mon-1, day, 23, 59) < new Date();
+});
+const _currentST = _allPlayed ? _latestST + 1 : _latestST;
 const SPIELTAGE = Array.from({length:34},(_,i)=>{
   const n = i+1;
-  let status = n < _latestST ? 'past' : n === _latestST ? 'current' : 'future';
+  let status = n < _currentST ? 'past' : n === _currentST ? 'current' : 'future';
   return {nr:n, status};
 });
 
-let currentSpieltag = Math.max(...Object.keys(MATCHES_BY_ST).map(Number));
+let currentSpieltag = _currentST;
 function getMatches(){ return MATCHES_BY_ST[currentSpieltag] || []; }
 
 function renderSpieltageGrid(){
@@ -1181,7 +1190,9 @@ function selectSpieltag(nr){
   if(st.status === 'past'){
     info.innerHTML = `<span style="color:var(--green)">✓ Spieltag ${nr} wurde bereits gespielt.</span><br>Die Prognose zeigt die damalige Modellberechnung.`;
   } else if(st.status === 'current'){
-    info.innerHTML = `<span style="color:var(--acc)">▶ Spieltag ${nr} — aktueller Spieltag.</span><br>Prognose-Daten sind vollständig eingetragen.`;
+    info.innerHTML = MATCHES_BY_ST[nr]
+      ? `<span style="color:var(--acc)">▶ Spieltag ${nr} — aktueller Spieltag.</span><br>Prognose-Daten sind vollständig eingetragen.`
+      : `<span style="color:var(--acc)">▶ Spieltag ${nr} — aktueller Spieltag.</span><br>Daten werden von der API geladen.`;
   } else {
     info.innerHTML = `<span style="color:var(--muted2)">⏳ Spieltag ${nr} liegt in der Zukunft.</span><br>Sobald Spielplan und Quoten bekannt sind, können die Daten eingetragen werden.`;
   }
