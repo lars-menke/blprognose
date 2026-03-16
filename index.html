@@ -270,7 +270,14 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
 .calc-btn:hover{opacity:.85}
 .manual-result{background:var(--s1);border:1px solid var(--border);padding:20px;min-height:200px}
 
-@media(max-width:768px){header{padding:14px 18px}.tabs,.page,.rules-bar{padding-left:18px;padding-right:18px}.games-grid{grid-template-columns:1fr}.detail-panel{width:100vw}}
+@media(max-width:768px){
+  header{padding:14px 18px}
+  .tabs,.page,.rules-bar{padding-left:18px;padding-right:18px}
+  .games-grid{grid-template-columns:1fr}
+  .detail-panel{width:100vw}
+  .logo h1{text-shadow:0 0 12px rgba(232,240,50,.25)}
+  .splash-title{text-shadow:0 0 16px rgba(232,240,50,.3)}
+}
 </style>
 </head>
 <body>
@@ -325,7 +332,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#32d4f0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#32d4f0"/>
       </svg>
-      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.4.0</span></h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.4.1</span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
@@ -343,7 +350,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
   <div class="info-box">
     <div class="info-box-head">
       <span class="info-box-title">Modell-Übersicht</span>
-      <span class="info-box-ver" id="infoVer">v1.4.0</span>
+      <span class="info-box-ver" id="infoVer">v1.4.1</span>
       <button class="info-close-btn" onclick="closeInfo()">✕</button>
     </div>
     <div class="info-body" id="infoBody"></div>
@@ -464,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.4.0';
+const VERSION = 'v1.4.1';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -1302,9 +1309,18 @@ async function fetchLogos(){
 }
 
 // ─── SPLASH ──────────────────────────────────────────────────────────────────
-function initApp(){
+async function initApp(){
+  // Aktuellen Spieltag direkt von openligadb ermitteln (immer korrekt, egal wie viele gespielt)
+  try {
+    const res = await fetch('https://api.openligadb.de/getcurrentgroup/bl1');
+    const grp = await res.json();
+    if(grp.GroupOrderID >= 1 && grp.GroupOrderID <= 34){
+      currentSpieltag = grp.GroupOrderID;
+    }
+  } catch(e){ /* Fallback: _currentST bleibt erhalten */ }
+
   selectSpieltag(currentSpieltag);
-  fetchLogos();   // Logos asynchron laden — Karten rendern sich danach automatisch neu
+  fetchLogos();
   // Splash nach 2.4s ausblenden
   setTimeout(()=>{
     const splash = document.getElementById('splash');
