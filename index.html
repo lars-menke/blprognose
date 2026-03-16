@@ -332,7 +332,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#32d4f0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#32d4f0"/>
       </svg>
-      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.4.1</span></h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.4.2</span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
@@ -350,7 +350,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
   <div class="info-box">
     <div class="info-box-head">
       <span class="info-box-title">Modell-Übersicht</span>
-      <span class="info-box-ver" id="infoVer">v1.4.1</span>
+      <span class="info-box-ver" id="infoVer">v1.4.2</span>
       <button class="info-close-btn" onclick="closeInfo()">✕</button>
     </div>
     <div class="info-body" id="infoBody"></div>
@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.4.1';
+const VERSION = 'v1.4.2';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -1310,15 +1310,23 @@ async function fetchLogos(){
 
 // ─── SPLASH ──────────────────────────────────────────────────────────────────
 async function initApp(){
-  // Aktuellen Spieltag direkt von openligadb ermitteln (immer korrekt, egal wie viele gespielt)
-  try {
-    const res = await fetch('https://api.openligadb.de/getcurrentgroup/bl1');
-    const grp = await res.json();
-    if(grp.GroupOrderID >= 1 && grp.GroupOrderID <= 34){
-      currentSpieltag = grp.GroupOrderID;
-    }
-  } catch(e){ /* Fallback: _currentST bleibt erhalten */ }
+  let stNum = _currentST; // Fallback: datum-basierte Schätzung
 
+  try {
+    // Schritt 1: Welcher Spieltag ist laut openligadb "aktuell"?
+    const grp = await fetch(`${OLDB_BASE}/getcurrentgroup/bl1`).then(r=>r.json());
+    const apiST = grp.GroupOrderID;
+
+    if(apiST >= 1 && apiST <= 33){
+      // Schritt 2: Sind alle Spiele dieses Spieltags schon beendet?
+      const matches = await fetch(`${OLDB_BASE}/getmatchdata/bl1/2025/${apiST}`).then(r=>r.json());
+      const allFinished = Array.isArray(matches) && matches.length > 0 && matches.every(m=>m.matchIsFinished);
+      // Ab Montag: alle beendet → nächsten Spieltag anzeigen
+      stNum = allFinished ? apiST + 1 : apiST;
+    }
+  } catch(e){ /* Kein Netz oder API-Fehler: Fallback bleibt */ }
+
+  currentSpieltag = stNum;
   selectSpieltag(currentSpieltag);
   fetchLogos();
   // Splash nach 2.4s ausblenden
