@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.4.4';
+const VERSION = 'v1.5.0';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -610,22 +610,13 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   const effAGF = aForm ? (1-FORM_WEIGHT)*a.aGF + FORM_WEIGHT*aForm.gf : a.aGF;
   const effAGA = aForm ? (1-FORM_WEIGHT)*a.aGA + FORM_WEIGHT*aForm.ga : a.aGA;
 
-  // Liga-Durchschnitte aus ST-Daten (Saison 25/26, Stand ST23)
-  // lgAvgH/lgAvgA kürzen sich in der Formel heraus — nur lgDefH/lgDefA wirken
-  const lgAvgH = 1.64;  // Ø hGF über alle 18 Teams
-  const lgAvgA = 1.14;  // Ø aGF über alle 18 Teams
-  const lgDefH = 1.21;  // Ø hGA über alle 18 Teams (was: 1.30 → 7% zu hoch)
-  const lgDefA = 1.58;  // Ø aGA über alle 18 Teams (was: 1.55 → leicht zu niedrig)
+  // Normierung: Ø hGA / Ø aGA aus ST-Daten (Saison 25/26, ST23)
+  // Heimvorteil ist implizit in hGF/hGA vs aGF/aGA enthalten
+  const lgDefH = 1.21;  // Ø hGA über alle 18 Teams
+  const lgDefA = 1.58;  // Ø aGA über alle 18 Teams
 
-  let lH = (effHGF / lgAvgH) * (effAGA / lgDefA) * lgAvgH;
-  let lA = (effAGF / lgAvgA) * (effHGA / lgDefH) * lgAvgA;
-
-  // Heimvorteil bereits in Heim-Werten enthalten
-  // Form 40%
-  const scH = formScore(fH||Array(5).fill(null));
-  const scA = formScore(fA||Array(5).fill(null));
-  lH *= (0.6 + 0.4 * (0.6 + 0.8*scH));
-  lA *= (0.6 + 0.4 * (0.6 + 0.8*scA));
+  let lH = effHGF * (effAGA / lgDefA);
+  let lA = effAGF * (effHGA / lgDefH);
 
   // Marktkorrektur: Newton-Raphson (Regel 5)
   lH = Math.max(.3, Math.min(4.5, lH));
@@ -724,11 +715,36 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
 
 // ─── SPIELTAG-BERECHNUNG MIT MONOKULTUR-SCHUTZ ─────────────────────────────
 function recalcAll(){
-  // Schritt 1: Alle Spiele einzeln berechnen
   const raw = {};
   getMatches().forEach(m => { raw[m.id] = calcSingle(m.home, m.away, m.p, null, null, null, m.hForm, m.aForm); });
 
-  // Schritt 2: Score-Monokultur-Schutz
+  // Monokultur-Schutz: reihenfolgeunabhängig via Konfidenz-Priorität
+  // Bei überlasteten Scores: höchste Score-Wahrscheinlichkeit behält den Tipp,
+  // Tiebreak: größerer Rangabstand = klarer Favorit = bevorzugt behalten
+  const tippGroups = {};
+  getMatches().forEach(m => {
+    const t = raw[m.id].naturalTipp; if(!t) return;
+    if(!tippGroups[t]) tippGroups[t] = [];
+    tippGroups[t].push(m.id);
+  });
+
+  const stData = _dynST_map[currentSpieltag] || ST;
+  const toAdjust = new Set();
+  Object.entries(tippGroups).forEach(([, ids]) => {
+    if(ids.length <= MONO_MAX) return;
+    const sorted = ids.slice().sort((idA, idB) => {
+      const pA = raw[idA].srt.find(([s]) => s === raw[idA].naturalTipp)?.[1] ?? 0;
+      const pB = raw[idB].srt.find(([s]) => s === raw[idB].naturalTipp)?.[1] ?? 0;
+      if(Math.abs(pA - pB) > 0.0005) return pB - pA;
+      const mA = getMatches().find(m => m.id === idA);
+      const mB = getMatches().find(m => m.id === idB);
+      const gapA = Math.abs((stData[mA?.home]?.rank??9) - (stData[mA?.away]?.rank??9));
+      const gapB = Math.abs((stData[mB?.home]?.rank??9) - (stData[mB?.away]?.rank??9));
+      return gapB - gapA;
+    });
+    sorted.slice(MONO_MAX).forEach(id => toAdjust.add(id));
+  });
+
   const finalTipps = {};
   const assignedCounts = {};
 
@@ -737,32 +753,21 @@ function recalcAll(){
     let tipp = r.naturalTipp;
     let adjusted = false;
 
-    // Prüfe ob dieser Score schon MONO_MAX mal vergeben
-    assignedCounts[tipp] = (assignedCounts[tipp]||0) + 1;
-
-    if(assignedCounts[tipp] > MONO_MAX){
-      // Suche nächstbesten Score im gleichen Outcome der noch < MONO_MAX ist
+    if(toAdjust.has(m.id)){
       for(const[s] of r.srt){
         if(s === tipp) continue;
         const[hi,ai]=s.split(':').map(Number);
         const o=hi>ai?'H':hi<ai?'A':'D';
-        if(o === r.wo){
-          const curCount = assignedCounts[s]||0;
-          if(curCount < MONO_MAX){
-            // rücksetzen des alten
-            assignedCounts[tipp] = (assignedCounts[tipp]||1) - 1;
-            tipp = s;
-            assignedCounts[tipp] = (assignedCounts[tipp]||0) + 1;
-            adjusted = true;
-            break;
-          }
+        if(o === r.wo && (assignedCounts[s]||0) < MONO_MAX){
+          tipp = s; adjusted = true; break;
         }
       }
     }
 
+    assignedCounts[tipp] = (assignedCounts[tipp]||0) + 1;
     finalTipps[m.id] = {...r, tipp, adjusted};
     if(adjusted){
-      finalTipps[m.id].ins = [`🔀 Score angepasst (Monokultur-Schutz: ${r.naturalTipp} war bereits ${MONO_MAX}×)`, ...r.ins];
+      finalTipps[m.id].ins = [`🔀 Score angepasst (Monokultur-Schutz: ${r.naturalTipp} bereits ${MONO_MAX}×, Konfidenz-Priorität)`, ...r.ins];
     }
   });
 
@@ -977,24 +982,19 @@ function manualCalc(){
   const hN=document.getElementById('mTeamH').value||'Heim';
   const aN=document.getElementById('mTeamA').value||'Gast';
 
-  // Fake ST-Einträge für manuelle Eingabe
-  const fakeH = {rank:9, hGF:gfHH, hGA:gaHH, aGF:gfHH*.75, aGA:gaHH*1.2};
-  const fakeA = {rank:9, hGF:gfAA*1.2, hGA:gaAA*.85, aGF:gfAA, aGA:gaAA};
-  const lgAvgH=1.64, lgAvgA=1.14, lgDefH=1.21, lgDefA=1.58;
+  // Selbe Normierung wie calcSingle
+  const lgDefH=1.21, lgDefA=1.58;
 
-  let lH=(gfHH/lgAvgH)*(gaAA/lgDefA)*lgAvgH + hB;
-  let lA=(gfAA/lgAvgA)*(gaHH/lgDefH)*lgAvgA;
+  let lH = gfHH*(gaAA/lgDefA) + hB;
+  let lA = gfAA*(gaHH/lgDefH);
   const scH=formScore(mFH), scA=formScore(mFA);
   lH *= (0.6+0.4*(0.6+0.8*scH));
   lA *= (0.6+0.4*(0.6+0.8*scA));
   lH *= (1-bel*.12);
   lH=Math.max(.3,Math.min(4.5,lH));lA=Math.max(.3,Math.min(4.5,lA));
 
-  const M=7; let sc={}; let pH=0,pD=0,pA=0;
-  for(let hi=0;hi<=M;hi++) for(let ai=0;ai<=M;ai++){
-    const p=pois(lH,hi)*pois(lA,ai); sc[`${hi}:${ai}`]=p;
-    if(hi>ai) pH+=p; else if(hi===ai) pD+=p; else pA+=p;
-  }
+  // Dixon-Coles-Korrektur (konsistent mit Hauptmodell)
+  const {sc, pH, pD, pA} = poisMatrix(lH, lA);
   const srt=Object.entries(sc).sort((a,b)=>b[1]-a[1]);
   let wo=pH>pD&&pH>pA?'H':pA>pD&&pA>pH?'A':'D';
   let drawBlocked=false;
