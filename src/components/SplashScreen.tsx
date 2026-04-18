@@ -33,7 +33,7 @@ export function SplashScreen({ onDone }: Props) {
       </div>
 
       <div className={`${styles.title} ${visible ? styles.titleVisible : ''}`}>
-        BLforcast
+        BLforecast
       </div>
 
       <div className={`${styles.sub} ${visible ? styles.subVisible : ''}`}>

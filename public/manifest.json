@@ -1,6 +1,6 @@
 {
-  "name": "BLforcast",
-  "short_name": "BLforcast",
+  "name": "BLforecast",
+  "short_name": "BLforecast",
   "description": "Bundesliga Kicktipp-Prognose mit Poisson-Modell",
   "start_url": "./",
   "display": "standalone",
