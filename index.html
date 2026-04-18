@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.5.3';
+const VERSION = 'v1.5.4';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -1309,13 +1309,22 @@ async function fetchLogos(){
     const r = await fetch(`${OLDB_BASE}/getavailableteams/${OLDB_LEAGUE}/${OLDB_SEASON}`);
     if(!r.ok) return;
     const teams = await r.json();
-    let found = 0;
+    // Erst alle URLs setzen (Fallback), dann als Blobs laden (kein Referer-Header → kein Hotlink-Block)
     teams.forEach(t => {
       const code = resolveCode(t);
-      // Wikimedia-URLs können geblockt werden — img onerror zeigt SVG-Badge als Fallback
-      if(code && t.teamIconUrl){ LOGOS[code] = t.teamIconUrl; found++; }
+      if(code && t.teamIconUrl) LOGOS[code] = t.teamIconUrl;
     });
-    if(found > 0){ renderGames(); renderSummary(); }
+    renderGames(); renderSummary();
+    await Promise.allSettled(teams.map(async t => {
+      const code = resolveCode(t);
+      if(!code || !t.teamIconUrl) return;
+      try {
+        const ir = await fetch(t.teamIconUrl, {referrerPolicy:'no-referrer'});
+        if(!ir.ok) return;
+        LOGOS[code] = URL.createObjectURL(await ir.blob());
+      } catch{}
+    }));
+    renderGames(); renderSummary();
   } catch(e) { /* kein Netz → SVG-Fallback-Badges bleiben */ }
 }
 
