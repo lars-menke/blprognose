@@ -1,12 +1,21 @@
 .screen {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-page);
 }
 
-.title {
-  padding: var(--space-4) var(--space-5) var(--space-2);
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-5) var(--space-3);
+  position: sticky;
+  top: 0;
+  background: var(--bg-page);
+  z-index: 10;
+  border-bottom: var(--hairline) solid var(--separator);
 }
 
 .large {
@@ -24,37 +33,190 @@
   margin: var(--space-1) 0 0;
 }
 
-.segmented {
+.spieltagBtn {
   display: flex;
-  gap: 0;
-  margin: var(--space-3) var(--space-4) var(--space-3);
+  flex-direction: column;
+  align-items: center;
   background: var(--bg-fill);
   border-radius: var(--radius-control);
-  padding: 2px;
+  padding: var(--space-2) var(--space-3);
+  min-width: 52px;
+  transition: background 0.1s;
 }
 
-.segment,
-.segmentActive {
-  flex: 1;
-  padding: 6px 0;
-  font-size: var(--size-footnote);
-  color: var(--text-primary);
-  border-radius: var(--radius-segmented-thumb);
-  background: transparent;
+.spieltagBtn:active {
+  background: var(--bg-fill-strong);
 }
 
-.segment {
-  opacity: 0.6;
+.spieltagBtnNr {
+  font-size: var(--size-title-2);
+  font-weight: var(--weight-bold);
+  color: var(--system-blue);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
-.segmentActive {
-  background: var(--bg-card);
+.spieltagBtnLabel {
+  font-size: var(--size-caption-2);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* ── Status-Chips ── */
+.statusChip {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-5);
+}
+
+.chipCurrent, .chipPast, .chipFuture, .chipMono {
+  font-size: var(--size-caption-1);
   font-weight: var(--weight-medium);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
 }
 
+.chipCurrent {
+  background: color-mix(in srgb, var(--system-blue) 15%, transparent);
+  color: var(--system-blue);
+}
+
+.chipPast {
+  background: color-mix(in srgb, var(--system-green) 15%, transparent);
+  color: var(--system-green);
+}
+
+.chipFuture {
+  background: var(--bg-fill);
+  color: var(--text-secondary);
+}
+
+.chipMono {
+  background: color-mix(in srgb, var(--system-teal) 12%, transparent);
+  color: var(--system-teal);
+}
+
+/* ── Match-Liste ── */
 .list {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-8);
+}
+
+/* ── Loading / Error ── */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) 0;
+  font-size: var(--size-subhead);
+  color: var(--text-secondary);
+}
+
+.stateError {
+  color: var(--system-red);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--separator);
+  border-top-color: var(--system-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Spieltag-Selector Modal ── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  backdrop-filter: blur(4px);
+}
+
+@media (min-width: 480px) {
+  .overlay { align-items: center; }
+}
+
+.modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  padding: var(--space-5);
+  width: 100%;
+  max-height: 70dvh;
+  overflow-y: auto;
+}
+
+@media (min-width: 480px) {
+  .modal {
+    border-radius: var(--radius-card);
+    max-width: 400px;
+    max-height: 80dvh;
+  }
+}
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.modalTitle {
+  font-size: var(--size-headline);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+}
+
+.modalClose {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-fill);
+  color: var(--text-secondary);
+  font-size: var(--size-subhead);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-1);
+}
+
+.stBtn {
+  padding: var(--space-3) 0;
+  background: var(--bg-fill);
+  border-radius: var(--radius-button);
+  color: var(--text-secondary);
+  font-size: var(--size-footnote);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.1s;
+}
+
+.stBtn:active {
+  background: var(--bg-fill-strong);
+}
+
+.stBtnCurrent {
+  background: color-mix(in srgb, var(--system-blue) 15%, transparent);
+  color: var(--system-blue);
+  font-weight: var(--weight-bold);
+}
+
+.stBtnPast {
+  opacity: 0.5;
 }

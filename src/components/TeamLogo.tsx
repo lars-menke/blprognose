@@ -6,22 +6,43 @@ type Size = 'sm' | 'md' | 'lg';
 
 type Props = {
   club: Club;
+  logoUrl?: string;
   size?: Size;
 };
 
-const PIXEL: Record<Size, number> = { sm: 20, md: 28, lg: 48 };
+const PIXEL: Record<Size, number> = { sm: 20, md: 28, lg: 40 };
 
-export function TeamLogo({ club, size = 'sm' }: Props) {
+export function TeamLogo({ club, logoUrl, size = 'sm' }: Props) {
   const px = PIXEL[size];
-  const style: CSSProperties = {
+  const badgeStyle: CSSProperties = {
     width: px,
     height: px,
     background: club.color,
     color: club.textOnColor === 'dark' ? '#000' : '#fff',
-    fontSize: Math.round(px * 0.42),
+    fontSize: Math.round(px * 0.36),
   };
+
+  if (logoUrl) {
+    return (
+      <span className={styles.wrap} style={{ width: px, height: px }}>
+        <img
+          className={styles.img}
+          src={logoUrl}
+          alt={club.fullName}
+          width={px}
+          height={px}
+          referrerPolicy="no-referrer"
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
+        <span className={styles.badge} style={badgeStyle} aria-hidden="true">
+          {club.code}
+        </span>
+      </span>
+    );
+  }
+
   return (
-    <span className={styles.logo} style={style} aria-label={club.fullName}>
+    <span className={styles.badge} style={badgeStyle} aria-label={club.fullName}>
       {club.code}
     </span>
   );

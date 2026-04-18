@@ -1,43 +1,111 @@
+import { useState } from 'react';
 import { MatchCard } from '../components/MatchCard';
 import { CLUBS } from '../lib/clubs';
+import { useMatchday } from '../lib/useMatchday';
 import styles from './MatchdayScreen.module.css';
 
 export function MatchdayScreen() {
+  const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, setSpielTag } = useMatchday();
+  const [selectorOpen, setSelectorOpen] = useState(false);
+
+  const isPast = spieltag < trueSpieltag;
+  const isCurrent = spieltag === trueSpieltag;
+
   return (
     <div className={styles.screen}>
-      <header className={styles.title}>
-        <h1 className={styles.large}>Spieltag</h1>
-        <p className={styles.subtitle}>27. Spieltag · Bundesliga</p>
+      {/* Header */}
+      <header className={styles.header}>
+        <div>
+          <h1 className={styles.large}>Prognose</h1>
+          <p className={styles.subtitle}>
+            {loading ? 'Lade…' : `${spieltag}. Spieltag · Bundesliga 2025/26`}
+          </p>
+        </div>
+        <button
+          className={styles.spieltagBtn}
+          onClick={() => setSelectorOpen(true)}
+          disabled={loading}
+          aria-label="Spieltag wählen"
+        >
+          <span className={styles.spieltagBtnNr}>{spieltag}</span>
+          <span className={styles.spieltagBtnLabel}>Spieltag</span>
+        </button>
       </header>
 
-      <div className={styles.segmented} role="tablist">
-        <button className={styles.segmentActive} role="tab" aria-selected="true">Heute</button>
-        <button className={styles.segment} role="tab">Alle</button>
-        <button className={styles.segment} role="tab">Favoriten</button>
+      {/* Status-Chip */}
+      {!loading && !error && (
+        <div className={styles.statusChip}>
+          {isCurrent && <span className={styles.chipCurrent}>Aktuell</span>}
+          {isPast && <span className={styles.chipPast}>Gespielt</span>}
+          {!isCurrent && !isPast && <span className={styles.chipFuture}>Ausstehend</span>}
+          {hasMono && <span className={styles.chipMono}>🔀 Monokultur-Schutz aktiv</span>}
+        </div>
+      )}
+
+      {/* Match-Liste */}
+      <div className={styles.list}>
+        {loading && (
+          <div className={styles.state}>
+            <div className={styles.spinner} />
+            <span>Lade Spieltag…</span>
+          </div>
+        )}
+        {error && (
+          <div className={`${styles.state} ${styles.stateError}`}>
+            Fehler: {error}
+          </div>
+        )}
+        {!loading && !error && matches.length === 0 && (
+          <div className={styles.state}>Keine Daten für Spieltag {spieltag}</div>
+        )}
+        {!loading && matches.map(m => {
+          const home = CLUBS[m.home];
+          const away = CLUBS[m.away];
+          if (!home || !away) return null;
+          const fp = m.result.fp;
+          const topTip = fp >= 0.70;
+          return (
+            <MatchCard
+              key={m.id}
+              home={home}
+              away={away}
+              kickoff={m.kickoff}
+              result={m.result}
+              homeLogo={logos[m.home]}
+              awayLogo={logos[m.away]}
+              topTip={topTip}
+            />
+          );
+        })}
       </div>
 
-      <div className={styles.list}>
-        <MatchCard
-          home={CLUBS.FCB}
-          away={CLUBS.BVB}
-          kickoff="SA · 18:30"
-          venue="Allianz Arena"
-          topTip
-          prediction={{ homeGoals: 2, awayGoals: 1, home: 0.54, draw: 0.22, away: 0.24 }}
-        />
-        <MatchCard
-          home={CLUBS.RBL}
-          away={CLUBS.B04}
-          kickoff="SA · 15:30"
-          prediction={{ homeGoals: 1, awayGoals: 2, home: 0.28, draw: 0.26, away: 0.46 }}
-        />
-        <MatchCard
-          home={CLUBS.SGE}
-          away={CLUBS.S04}
-          kickoff="SO · 17:30"
-          prediction={{ homeGoals: 2, awayGoals: 0, home: 0.62, draw: 0.23, away: 0.15 }}
-        />
-      </div>
+      {/* Spieltag-Selector Modal */}
+      {selectorOpen && (
+        <div className={styles.overlay} onClick={() => setSelectorOpen(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <span className={styles.modalTitle}>Spieltag wählen</span>
+              <button className={styles.modalClose} onClick={() => setSelectorOpen(false)}>✕</button>
+            </div>
+            <div className={styles.stGrid}>
+              {Array.from({ length: 34 }, (_, i) => i + 1).map(nr => {
+                let cls = styles.stBtn;
+                if (nr === trueSpieltag) cls += ` ${styles.stBtnCurrent}`;
+                else if (nr < trueSpieltag) cls += ` ${styles.stBtnPast}`;
+                return (
+                  <button
+                    key={nr}
+                    className={cls}
+                    onClick={() => { setSpielTag(nr); setSelectorOpen(false); }}
+                  >
+                    {nr}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
