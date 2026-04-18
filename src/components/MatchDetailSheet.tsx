@@ -73,28 +73,31 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
         {/* Modell-Parameter */}
         <div className={styles.sectionLabel}>Modell</div>
         <div className={styles.sectionCard}>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>λ Heim</span>
-            <span className={`${styles.rowValue} ${styles.rowMono}`}>{lbl(result.lH)}</span>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>λ Gast</span>
-            <span className={`${styles.rowValue} ${styles.rowMono}`}>{lbl(result.lA)}</span>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>Dixon-Coles ρ</span>
-            <span className={`${styles.rowValue} ${styles.rowMono}`}>−0.13</span>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>λ-Differenz</span>
-            <span className={`${styles.rowValue} ${styles.rowMono}`}>{lbl(result.lambdaDiff)}</span>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.rowLabel}>Remis-Schwelle</span>
-            <span className={`${styles.rowValue} ${styles.rowMono}`}>
-              {(result.effectiveDrawThreshold * 100).toFixed(0)}%{result.lambdaDiff < 0.25 ? ' (eng)' : ''}
-            </span>
-          </div>
+          <Row
+            label="λ Heim"
+            desc="Erwartete Tore des Heimteams (Poisson-Mittelwert)"
+            value={lbl(result.lH)}
+          />
+          <Row
+            label="λ Gast"
+            desc="Erwartete Tore des Gastes (Poisson-Mittelwert)"
+            value={lbl(result.lA)}
+          />
+          <Row
+            label="Dixon-Coles ρ"
+            desc="Korrektur für 0:0 und 1:0 / 0:1 — niedrige Scores treten häufiger auf als Poisson vorhersagt"
+            value="−0.13"
+          />
+          <Row
+            label="λ-Differenz"
+            desc="Abstand der erwarteten Torwerte — je kleiner, desto ausgeglichener"
+            value={lbl(result.lambdaDiff)}
+          />
+          <Row
+            label="Remis-Schwelle"
+            desc={`Mindest-Remiswahrscheinlichkeit für einen X-Tipp${result.lambdaDiff < 0.25 ? ' — engeres Fenster wegen ausgeglichener Stärke' : ''}`}
+            value={`${(result.effectiveDrawThreshold * 100).toFixed(0)}%${result.lambdaDiff < 0.25 ? ' (eng)' : ''}`}
+          />
         </div>
 
         {/* Aktive Regeln */}
@@ -152,6 +155,18 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
 
         <button className={styles.closeBtn} onClick={onClose}>Schließen</button>
       </div>
+    </div>
+  );
+}
+
+function Row({ label, desc, value }: { label: string; desc: string; value: string }) {
+  return (
+    <div className={styles.row}>
+      <div className={styles.rowLabelBlock}>
+        <span className={styles.rowLabel}>{label}</span>
+        <span className={styles.rowDesc}>{desc}</span>
+      </div>
+      <span className={`${styles.rowValue} ${styles.rowMono}`}>{value}</span>
     </div>
   );
 }
