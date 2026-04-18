@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.5.1';
+const VERSION = 'v1.5.2';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -978,19 +978,22 @@ function manualCalc(){
   const gaAA=parseFloat(document.getElementById('mGaAA').value)||1.5;
   const hB=parseFloat(document.getElementById('mHeimBonus').value)||.25;
   const bel=parseFloat(document.getElementById('mBelastung').value)||0;
-  const drawThr=parseFloat(document.getElementById('mDrawThr').value)||.30;
+  const rawDrawThr=parseFloat(document.getElementById('mDrawThr').value);
+  const drawThr=isNaN(rawDrawThr)?0.30:rawDrawThr;
   const hN=document.getElementById('mTeamH').value||'Heim';
   const aN=document.getElementById('mTeamA').value||'Gast';
 
   // Selbe Normierung wie calcSingle
   const lgDefH=1.21, lgDefA=1.58;
 
-  let lH = gfHH*(gaAA/lgDefA) + hB;
+  // hB nach Formgewicht/Belastung addieren — Heimbonus soll nicht skaliert werden
+  let lH = gfHH*(gaAA/lgDefA);
   let lA = gfAA*(gaHH/lgDefH);
   const scH=formScore(mFH), scA=formScore(mFA);
   lH *= (0.6+0.4*(0.6+0.8*scH));
   lA *= (0.6+0.4*(0.6+0.8*scA));
   lH *= (1-bel*.12);
+  lH += hB;
   lH=Math.max(.3,Math.min(4.5,lH));lA=Math.max(.3,Math.min(4.5,lA));
 
   // Dixon-Coles-Korrektur (konsistent mit Hauptmodell)
@@ -1000,13 +1003,15 @@ function manualCalc(){
   let drawBlocked=false;
   if(wo==='D' && pD < drawThr){ wo=pH>=pA?'H':'A'; drawBlocked=true; }
 
-  // Mindesttor-Regel
+  // Mindesttor-Regel + FAV_MIN_GOALS (konsistent mit calcSingle)
   const pAwayGoal = 1 - Math.exp(-lA);
   const pHomeGoal = 1 - Math.exp(-lH);
   const needAwayGoal = pAwayGoal >= 0.50;
   const needHomeGoal = pHomeGoal >= 0.50;
+  const favLambdaM = wo==='H' ? lH : wo==='A' ? lA : null;
+  const needFavMinGoalsM = favLambdaM !== null && favLambdaM >= FAV_MIN_GOALS_LAMBDA;
 
-  let tipp=null; let rawTipp=null; let goalRuleApplied=false;
+  let tipp=null; let rawTipp=null; let goalRuleApplied=false; let favScoreRuleAppliedM=false;
   for(const[s] of srt){const[hi,ai]=s.split(':').map(Number);const o=hi>ai?'H':hi<ai?'A':'D';if(o===wo){rawTipp=s;break;}}
   for(const[s] of srt){
     const[hi,ai]=s.split(':').map(Number);
@@ -1014,9 +1019,16 @@ function manualCalc(){
     if(o!==wo) continue;
     if(needAwayGoal && ai===0) continue;
     if(needHomeGoal && hi===0) continue;
+    if(needFavMinGoalsM && wo==='H' && hi<2) continue;
+    if(needFavMinGoalsM && wo==='A' && ai<2) continue;
     tipp=s; break;
   }
-  if(tipp !== rawTipp) goalRuleApplied=true;
+  if(rawTipp && tipp !== rawTipp){
+    const[rhi,rai]=rawTipp.split(':').map(Number);
+    const[nhi,nai]=(tipp||rawTipp).split(':').map(Number);
+    if((needAwayGoal&&rai===0&&nai>0)||(needHomeGoal&&rhi===0&&nhi>0)) goalRuleApplied=true;
+    if(needFavMinGoalsM&&((wo==='H'&&rhi<2&&nhi>=2)||(wo==='A'&&rai<2&&nai>=2))) favScoreRuleAppliedM=true;
+  }
   if(!tipp) tipp=rawTipp;
   const fp=Math.max(pH,pA,pD);
   let cat,cc;
@@ -1031,6 +1043,7 @@ function manualCalc(){
 <span class="gc-cat ${cc}" style="margin-bottom:12px;display:inline-flex">${cat}</span>
 ${drawBlocked?`<div style="background:rgba(255,176,60,.08);border:1px solid rgba(255,176,60,.3);border-radius:5px;padding:7px 10px;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--orange);margin-bottom:10px">⚠️ Remis gesperrt (X=${(pD*100).toFixed(0)}% < ${(drawThr*100).toFixed(0)}%)</div>`:''}
 ${goalRuleApplied?`<div style="background:rgba(60,255,224,.08);border:1px solid rgba(60,255,224,.3);border-radius:5px;padding:7px 10px;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--acc2);margin-bottom:10px">⚽ Mindesttor-Regel: P(Gasttor≥1)=${(pAwayGoal*100).toFixed(0)}% ≥ 50% — ${rawTipp} → ${tipp}</div>`:''}
+${favScoreRuleAppliedM?`<div style="background:rgba(60,255,143,.08);border:1px solid rgba(60,255,143,.3);border-radius:5px;padding:7px 10px;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--green);margin-bottom:10px">🔵 Favorit-Mindestscore: λ=${(favLambdaM).toFixed(2)} ≥ ${FAV_MIN_GOALS_LAMBDA} → mind. 2 Tore erzwungen (${rawTipp} → ${tipp})</div>`:''}
 <div class="dp-outcome-bar">
 <div class="dp-seg h${hw?' winner':''}"><div class="dpval">${(pH*100).toFixed(1)}%</div><div class="dplbl">Heim</div></div>
 <div class="dp-seg d${dw?' winner':''}"><div class="dpval">${(pD*100).toFixed(1)}%</div><div class="dplbl">X</div></div>
