@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.5.0';
+const VERSION = 'v1.5.1';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -599,7 +599,7 @@ function marketCorrectNR(lH0, lA0, extP, iter=12){
 const FORM_WEIGHT = 0.40;
 const DC_RHO = -0.13;   // Dixon-Coles Korrelationsparameter (Niedrigzahl-Korrektur)
 
-function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
+function calcSingle(hAbb, aAbb, extP, drawThreshold, hForm, aForm){
   const stData = _dynST_map[currentSpieltag] || ST;
   const h = stData[hAbb]||ST[hAbb]||{rank:9,hGF:1.3,hGA:1.4,aGF:1.3,aGA:1.4};
   const a = stData[aAbb]||ST[aAbb]||{rank:9,hGF:1.3,hGA:1.4,aGF:1.3,aGA:1.4};
@@ -635,7 +635,7 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   // Bei sehr ausgeglichenen Spielen (|λH - λA| < 0.25) wird die Schwelle
   // auf 27% gesenkt, damit knappe Remis-Wahrscheinlichkeiten durchkommen
   const lambdaDiff = Math.abs(lH - lA);
-  const effectiveDrawThreshold = (drawThreshold) ? drawThreshold
+  const effectiveDrawThreshold = (drawThreshold != null) ? drawThreshold
     : (lambdaDiff < 0.25 ? DRAW_THRESHOLD_TIGHT : DRAW_THRESHOLD);
 
   let wo = pH>pD&&pH>pA ? 'H' : pA>pD&&pA>pH ? 'A' : 'D';
@@ -716,7 +716,7 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
 // ─── SPIELTAG-BERECHNUNG MIT MONOKULTUR-SCHUTZ ─────────────────────────────
 function recalcAll(){
   const raw = {};
-  getMatches().forEach(m => { raw[m.id] = calcSingle(m.home, m.away, m.p, null, null, null, m.hForm, m.aForm); });
+  getMatches().forEach(m => { raw[m.id] = calcSingle(m.home, m.away, m.p, null, m.hForm, m.aForm); });
 
   // Monokultur-Schutz: reihenfolgeunabhängig via Konfidenz-Priorität
   // Bei überlasteten Scores: höchste Score-Wahrscheinlichkeit behält den Tipp,
