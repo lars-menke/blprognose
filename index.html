@@ -332,7 +332,7 @@ header{padding:22px 32px 16px;display:flex;align-items:center;justify-content:sp
         <circle cx="7" cy="72.5" r="2.5" fill="#32d4f0"/>
         <circle cx="7" cy="27.5" r="2.5" fill="#32d4f0"/>
       </svg>
-      <h1>BL Prognose<span class="ver-badge" id="verBadge">v1.4.3</span></h1>
+      <h1>BL Prognose<span class="ver-badge" id="verBadge"></span></h1>
     </div>
     <span class="sub" id="headerSub">24. Spieltag · 2025/26</span>
   </div>
@@ -1348,7 +1348,10 @@ async function initApp(){
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', initApp);
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('verBadge').textContent = VERSION;
+  initApp();
+});
 </script>
 </body>
 </html>
