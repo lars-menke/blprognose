@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.5.2';
+const VERSION = 'v1.5.3';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -537,7 +537,7 @@ function teamBadge(code){
 // Logo-Wrapper: zuerst Badge sichtbar, bei erfolgreichem Laden des Bildes → Badge ausblenden
 function teamLogoHtml(code){
   const url=LOGOS[code]||'';
-  return `<span class="team-logo-wrap"><span class="team-logo-fb">${teamBadge(code)}</span>${url?`<img class="team-logo" src="${url}" alt="${code}" loading="lazy" onload="this.style.opacity=1;this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">`:''}</span>`;
+  return `<span class="team-logo-wrap"><span class="team-logo-fb">${teamBadge(code)}</span>${url?`<img class="team-logo" src="${url}" alt="${code}" loading="lazy" referrerpolicy="no-referrer" onload="this.style.opacity=1;this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">`:''}</span>`;
 }
 
 // ─── DIXON-COLES-KORREKTUR ───────────────────────────────────────────────────
@@ -1075,7 +1075,7 @@ const TEAM_CODE_MAP = {
   'FC Augsburg':'FCA',
   'Hamburger SV':'HSV',
   '1. FC Köln':'KOE','FC Köln':'KOE',
-  '1. FSV Mainz 05':'M05','FSV Mainz 05':'M05','Mainz 05':'M05',
+  '1. FSV Mainz 05':'M05','FSV Mainz 05':'M05','Mainz 05':'M05','Mainz':'M05',
   'Borussia Mönchengladbach':'BMG',
   'VfL Wolfsburg':'WOB',
   'FC St. Pauli':'STP',
@@ -1205,26 +1205,28 @@ function getMatches(){ return MATCHES_BY_ST[currentSpieltag] || []; }
 
 function renderSpieltageGrid(){
   const grid = document.getElementById('stGrid');
-  grid.innerHTML = SPIELTAGE.map(st => {
+  grid.innerHTML = Array.from({length:34}, (_,i) => {
+    const n = i+1;
     let cls = 'st-btn';
-    if(st.status==='current') cls += ' current';
-    else if(st.status==='past') cls += ' past';
-    return `<button class="${cls}" onclick="selectSpieltag(${st.nr})">${st.nr}</button>`;
+    if(n === currentSpieltag) cls += ' current';
+    else if(n < currentSpieltag) cls += ' past';
+    return `<button class="${cls}" onclick="selectSpieltag(${n})">${n}</button>`;
   }).join('');
 }
 
 function selectSpieltag(nr){
   currentSpieltag = nr;
-  const st = SPIELTAGE[nr-1];
   document.getElementById('stHeaderNum').textContent = nr;
   document.getElementById('headerSub').textContent = `${nr}. Spieltag · 2025/26`;
   document.querySelector('.spieltag-title').textContent = `Spieltag ${nr}`;
 
-  // Info-Text im Modal
+  // Status dynamisch aus currentSpieltag ableiten (nicht aus statischem SPIELTAGE-Array)
+  const isPast = nr < currentSpieltag;
+  const isCurrent = nr === currentSpieltag;
   const info = document.getElementById('stInfo');
-  if(st.status === 'past'){
+  if(isPast){
     info.innerHTML = `<span style="color:var(--green)">✓ Spieltag ${nr} wurde bereits gespielt.</span><br>Die Prognose zeigt die damalige Modellberechnung.`;
-  } else if(st.status === 'current'){
+  } else if(isCurrent){
     info.innerHTML = MATCHES_BY_ST[nr]
       ? `<span style="color:var(--acc)">▶ Spieltag ${nr} — aktueller Spieltag.</span><br>Prognose-Daten sind vollständig eingetragen.`
       : `<span style="color:var(--acc)">▶ Spieltag ${nr} — aktueller Spieltag.</span><br>Daten werden von der API geladen.`;
@@ -1310,6 +1312,7 @@ async function fetchLogos(){
     let found = 0;
     teams.forEach(t => {
       const code = resolveCode(t);
+      // Wikimedia-URLs können geblockt werden — img onerror zeigt SVG-Badge als Fallback
       if(code && t.teamIconUrl){ LOGOS[code] = t.teamIconUrl; found++; }
     });
     if(found > 0){ renderGames(); renderSummary(); }
