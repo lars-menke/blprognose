@@ -33,6 +33,7 @@ export type CalcResult = {
   favScoreRuleApplied: boolean;
   lambdaDiff: number;
   effectiveDrawThreshold: number;
+  marketApplied: boolean;
 };
 
 export type MatchResult = CalcResult & {
@@ -175,6 +176,7 @@ export function calcSingle(
     pH, pD, pA, naturalTipp, wo, srt, lH, lA, fp,
     drawBlocked, goalRuleApplied, favScoreRuleApplied,
     lambdaDiff, effectiveDrawThreshold,
+    marketApplied: extP !== null && mc.converged,
   };
 }
 

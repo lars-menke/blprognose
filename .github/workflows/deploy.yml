@@ -21,6 +21,8 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          VITE_ODDS_API_KEY: ${{ secrets.VITE_ODDS_API_KEY }}
 
       - uses: peaceiris/actions-gh-pages@v4
         with:

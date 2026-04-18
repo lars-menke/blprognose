@@ -4,7 +4,6 @@ export const OLDB_BASE = 'https://api.openligadb.de';
 export const OLDB_LEAGUE = 'bl1';
 export const OLDB_SEASON = '2025';
 
-// Maps OpenLigaDB API names to our club codes (matching clubs.ts)
 export const TEAM_CODE_MAP: Record<string, string> = {
   'FC Bayern München': 'FCB', 'Bayern München': 'FCB',
   'Borussia Dortmund': 'BVB',
@@ -73,23 +72,44 @@ export async function fetchSeason(): Promise<OldbMatch[]> {
 }
 
 export function buildDynST(all: OldbMatch[], beforeNr: number): Record<string, TeamStats> {
-  const acc: Record<string, { hGF: number; hGA: number; hN: number; aGF: number; aGA: number; aN: number }> = {};
+  const acc: Record<string, {
+    hGF: number; hGA: number; hN: number;
+    aGF: number; aGA: number; aN: number;
+    pts: number; gd: number;
+  }> = {};
+
   all.forEach(m => {
     if (m.group.groupOrderID >= beforeNr) return;
     const res = getFinalGoals(m);
     if (!res) return;
     const h = resolveCode(m.team1), a = resolveCode(m.team2);
     if (!h || !a) return;
-    acc[h] ??= { hGF: 0, hGA: 0, hN: 0, aGF: 0, aGA: 0, aN: 0 };
-    acc[a] ??= { hGF: 0, hGA: 0, hN: 0, aGF: 0, aGA: 0, aN: 0 };
+
+    acc[h] ??= { hGF: 0, hGA: 0, hN: 0, aGF: 0, aGA: 0, aN: 0, pts: 0, gd: 0 };
+    acc[a] ??= { hGF: 0, hGA: 0, hN: 0, aGF: 0, aGA: 0, aN: 0, pts: 0, gd: 0 };
+
     acc[h].hGF += res.g1; acc[h].hGA += res.g2; acc[h].hN++;
     acc[a].aGF += res.g2; acc[a].aGA += res.g1; acc[a].aN++;
+
+    const gd = res.g1 - res.g2;
+    acc[h].gd += gd;
+    acc[a].gd -= gd;
+    if (res.g1 > res.g2) { acc[h].pts += 3; }
+    else if (res.g1 === res.g2) { acc[h].pts += 1; acc[a].pts += 1; }
+    else { acc[a].pts += 3; }
   });
+
+  // Sort by points desc, then goal difference desc → real league rank
+  const sorted = Object.entries(acc).sort(([, a], [, b]) =>
+    b.pts !== a.pts ? b.pts - a.pts : b.gd - a.gd
+  );
+  const rankMap: Record<string, number> = {};
+  sorted.forEach(([code], i) => { rankMap[code] = i + 1; });
 
   const out: Record<string, TeamStats> = {};
   Object.entries(acc).forEach(([code, s]) => {
     out[code] = {
-      rank: 9,
+      rank: rankMap[code] ?? 9,
       hGF: s.hN > 0 ? +(s.hGF / s.hN).toFixed(2) : 1.3,
       hGA: s.hN > 0 ? +(s.hGA / s.hN).toFixed(2) : 1.4,
       aGF: s.aN > 0 ? +(s.aGF / s.aN).toFixed(2) : 1.1,
@@ -100,42 +120,57 @@ export function buildDynST(all: OldbMatch[], beforeNr: number): Record<string, T
 }
 
 export function buildForm(all: OldbMatch[], code: string, beforeNr: number, home: boolean): FormData {
-  const prev = all
-    .filter(m => {
-      if (m.group.groupOrderID >= beforeNr) return false;
-      const res = getFinalGoals(m);
-      if (!res) return false;
-      return home ? resolveCode(m.team1) === code : resolveCode(m.team2) === code;
-    })
-    .sort((a, b) => new Date(b.matchDateTimeUTC ?? b.matchDateTime ?? '').getTime()
-      - new Date(a.matchDateTimeUTC ?? a.matchDateTime ?? '').getTime())
+  const finished = all.filter(m => m.group.groupOrderID < beforeNr && !!getFinalGoals(m));
+  const byTime = (a: OldbMatch, b: OldbMatch) =>
+    new Date(b.matchDateTimeUTC ?? b.matchDateTime ?? '').getTime() -
+    new Date(a.matchDateTimeUTC ?? a.matchDateTime ?? '').getTime();
+
+  // Role-specific last 5 (home games for home role, away games for away role)
+  const rolePrev = finished
+    .filter(m => home ? resolveCode(m.team1) === code : resolveCode(m.team2) === code)
+    .sort(byTime)
     .slice(0, 5);
 
+  // Fall back to overall recent form when fewer than 3 role-specific games exist
+  const prev = rolePrev.length >= 3
+    ? rolePrev
+    : finished
+        .filter(m => resolveCode(m.team1) === code || resolveCode(m.team2) === code)
+        .sort(byTime)
+        .slice(0, 5);
+
   if (!prev.length) return null;
+
   let gf = 0, ga = 0;
   prev.forEach(m => {
     const res = getFinalGoals(m)!;
-    if (home) { gf += res.g1; ga += res.g2; }
-    else { gf += res.g2; ga += res.g1; }
+    const isHome = resolveCode(m.team1) === code;
+    gf += isHome ? res.g1 : res.g2;
+    ga += isHome ? res.g2 : res.g1;
   });
   return { gf: +(gf / prev.length).toFixed(2), ga: +(ga / prev.length).toFixed(2) };
 }
 
-export function buildMatchEntries(all: OldbMatch[], nr: number): MatchEntry[] {
-  const stRaw = all.filter(m => m.group.groupOrderID === nr);
-  return stRaw.flatMap(m => {
-    const hC = resolveCode(m.team1), aC = resolveCode(m.team2);
-    if (!hC || !aC) return [];
-    return [{
-      id: `${hC.toLowerCase()}-${aC.toLowerCase()}-${nr}`,
-      home: hC,
-      away: aC,
-      kickoff: fmtKickoff(m.matchDateTimeUTC ?? m.matchDateTime),
-      p: null,
-      hForm: buildForm(all, hC, nr, true),
-      aForm: buildForm(all, aC, nr, false),
-    }];
-  });
+export function buildMatchEntries(
+  all: OldbMatch[],
+  nr: number,
+  oddsMap: Record<string, MarketProbs> = {},
+): MatchEntry[] {
+  return all
+    .filter(m => m.group.groupOrderID === nr)
+    .flatMap(m => {
+      const hC = resolveCode(m.team1), aC = resolveCode(m.team2);
+      if (!hC || !aC) return [];
+      return [{
+        id: `${hC.toLowerCase()}-${aC.toLowerCase()}-${nr}`,
+        home: hC,
+        away: aC,
+        kickoff: fmtKickoff(m.matchDateTimeUTC ?? m.matchDateTime),
+        p: oddsMap[`${hC}-${aC}`] ?? null,
+        hForm: buildForm(all, hC, nr, true),
+        aForm: buildForm(all, aC, nr, false),
+      }];
+    });
 }
 
 export function detectCurrentSpieltag(all: OldbMatch[]): number {
@@ -151,7 +186,6 @@ export function detectCurrentSpieltag(all: OldbMatch[]): number {
   return allFinished && latest < 34 ? latest + 1 : latest;
 }
 
-// Logo loading: Wikimedia /thumb/ PNG → direkte SVG (hat CORS)
 function normalizeLogoUrl(url: string): string {
   const m = url.match(/^(.+\/commons\/)thumb\/(.+\.svg)\/\d+px-.+\.png$/);
   return m ? m[1] + m[2] : url;
@@ -164,7 +198,6 @@ export async function fetchLogos(): Promise<Record<string, string>> {
     if (!r.ok) return logos;
     const teams: Array<{ teamName: string; shortName: string; teamIconUrl: string }> = await r.json();
 
-    // Erst URLs setzen, dann als Blobs nachladen (no-referrer → kein Hotlink-Block)
     teams.forEach(t => {
       const code = resolveCode(t);
       if (code && t.teamIconUrl) logos[code] = normalizeLogoUrl(t.teamIconUrl);

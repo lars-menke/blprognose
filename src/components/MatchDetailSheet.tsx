@@ -98,6 +98,11 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
             desc={`Mindest-Remiswahrscheinlichkeit für einen X-Tipp${result.lambdaDiff < 0.25 ? ' — engeres Fenster wegen ausgeglichener Stärke' : ''}`}
             value={`${(result.effectiveDrawThreshold * 100).toFixed(0)}%${result.lambdaDiff < 0.25 ? ' (eng)' : ''}`}
           />
+          <Row
+            label="Marktkorrektur"
+            desc="Newton-Raphson-Kalibrierung auf Buchmacher-Quoten — passt λH und λA iterativ an bis Modell mit Markt übereinstimmt"
+            value={result.marketApplied ? 'aktiv' : 'inaktiv'}
+          />
         </div>
 
         {/* Aktive Regeln */}

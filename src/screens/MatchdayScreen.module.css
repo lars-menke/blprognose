@@ -119,6 +119,11 @@
   color: var(--system-teal);
 }
 
+.chipMarket {
+  background: color-mix(in srgb, var(--system-green) 12%, transparent);
+  color: var(--system-green);
+}
+
 /* ── Match-Liste ── */
 .list {
   display: flex;
