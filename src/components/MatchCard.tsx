@@ -17,9 +17,16 @@ type Props = {
 
 const OUTCOME_LABEL: Record<string, string> = { H: 'Heimsieg', D: 'Remis', A: 'Auswärtssieg' };
 
+function category(fp: number): { label: string; cls: 'catFav' | 'catMid' | 'catFifty' } {
+  if (fp >= 0.70) return { label: 'Favorit', cls: 'catFav' };
+  if (fp >= 0.55) return { label: 'Kante', cls: 'catMid' };
+  return { label: '50/50', cls: 'catFifty' };
+}
+
 export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, topTip, onClick }: Props) {
   const [hg, ag] = (result.tipp ?? '?').split(':').map(Number);
   const isAdjusted = result.adjusted;
+  const cat = category(result.fp);
 
   return (
     <button className={styles.card} onClick={onClick} type="button">
@@ -27,6 +34,10 @@ export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, top
         <span className={styles.meta}>{kickoff}</span>
         <div className={styles.badges}>
           {topTip && <span className={styles.badge}>TOP-TIPP</span>}
+          <span className={`${styles.badge} ${styles[cat.cls]}`}>{cat.label}</span>
+          {result.drawBlocked && <span className={`${styles.badge} ${styles.badgeInfo}`}>X gesperrt</span>}
+          {result.goalRuleApplied && <span className={`${styles.badge} ${styles.badgeInfo}`}>⚽</span>}
+          {result.favScoreRuleApplied && <span className={`${styles.badge} ${styles.badgeInfo}`}>2+</span>}
           {isAdjusted && <span className={`${styles.badge} ${styles.badgeMono}`}>🔀</span>}
         </div>
       </header>

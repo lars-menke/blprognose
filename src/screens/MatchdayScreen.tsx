@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { MatchCard } from '../components/MatchCard';
+import { MatchDetailSheet } from '../components/MatchDetailSheet';
 import { CLUBS } from '../lib/clubs';
 import { useMatchday } from '../lib/useMatchday';
+import type { MatchdayEntry } from '../lib/useMatchday';
 import styles from './MatchdayScreen.module.css';
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
   const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, setSpielTag } = useMatchday();
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<MatchdayEntry | null>(null);
 
   const isPast = spieltag < trueSpieltag;
   const isCurrent = spieltag === trueSpieltag;
@@ -86,10 +89,29 @@ export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
               homeLogo={logos[m.home]}
               awayLogo={logos[m.away]}
               topTip={topTip}
+              onClick={() => setSelectedMatch(m)}
             />
           );
         })}
       </div>
+
+      {/* Match Detail Sheet */}
+      {selectedMatch && (() => {
+        const home = CLUBS[selectedMatch.home];
+        const away = CLUBS[selectedMatch.away];
+        if (!home || !away) return null;
+        return (
+          <MatchDetailSheet
+            home={home}
+            away={away}
+            kickoff={selectedMatch.kickoff}
+            result={selectedMatch.result}
+            homeLogo={logos[selectedMatch.home]}
+            awayLogo={logos[selectedMatch.away]}
+            onClose={() => setSelectedMatch(null)}
+          />
+        );
+      })()}
 
       {/* Spieltag-Selector Modal */}
       {selectorOpen && (
