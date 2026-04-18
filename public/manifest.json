@@ -1,0 +1,17 @@
+{
+  "name": "BL Prognose",
+  "short_name": "BL Prognose",
+  "description": "Bundesliga Kicktipp-Prognose mit Poisson-Modell",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "./AppIcon.appiconset/Icon-App-60x60@2x.png", "sizes": "120x120", "type": "image/png" },
+    { "src": "./AppIcon.appiconset/Icon-App-60x60@3x.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "./AppIcon.appiconset/Icon-App-76x76@2x.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "./AppIcon.appiconset/Icon-App-83.5x83.5@2x.png", "sizes": "167x167", "type": "image/png" },
+    { "src": "./AppIcon.appiconset/Icon-App-1024x1024@1x.png", "sizes": "1024x1024", "type": "image/png" }
+  ]
+}
