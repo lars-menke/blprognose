@@ -1,4 +1,4 @@
-# Designsystem · BL Prognose
+# Designsystem · BLforcast
 
 Designsprache: Apple iOS. Diese Datei beschreibt die Patterns, die in allen Screens gelten. Jede neue Komponente orientiert sich an diesen Regeln, neue Farben und Abstände kommen ausschliesslich aus `src/styles/tokens.css`.
 

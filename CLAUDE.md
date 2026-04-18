@@ -1,4 +1,4 @@
-# BL Prognose · Claude Code Context
+# BLforcast · Claude Code Context
 
 Leitfaden für die Weiterentwicklung der Bundesliga-Prognose-PWA im Apple-iOS-Design. Diese Datei wird von Claude Code bei jedem Start gelesen.
 
