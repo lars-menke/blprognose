@@ -1,6 +1,8 @@
+import { useTheme } from './lib/useTheme';
 import { MatchdayScreen } from './screens/MatchdayScreen';
 import './styles/globals.css';
 
 export default function App() {
-  return <MatchdayScreen />;
+  const { toggle, isDark } = useTheme();
+  return <MatchdayScreen onThemeToggle={toggle} isDark={isDark} />;
 }

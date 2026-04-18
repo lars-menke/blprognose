@@ -33,6 +33,28 @@
   margin: var(--space-1) 0 0;
 }
 
+.headerActions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.themeBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-fill);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+.themeBtn:active {
+  background: var(--bg-fill-strong);
+}
+
 .spieltagBtn {
   display: flex;
   flex-direction: column;

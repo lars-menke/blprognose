@@ -4,7 +4,12 @@ import { CLUBS } from '../lib/clubs';
 import { useMatchday } from '../lib/useMatchday';
 import styles from './MatchdayScreen.module.css';
 
-export function MatchdayScreen() {
+type Props = {
+  onThemeToggle: () => void;
+  isDark: boolean;
+};
+
+export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
   const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, setSpielTag } = useMatchday();
   const [selectorOpen, setSelectorOpen] = useState(false);
 
@@ -21,6 +26,12 @@ export function MatchdayScreen() {
             {loading ? 'Lade…' : `${spieltag}. Spieltag · Bundesliga 2025/26`}
           </p>
         </div>
+        <div className={styles.headerActions}>
+        <button
+          className={styles.themeBtn}
+          onClick={onThemeToggle}
+          aria-label="Theme wechseln"
+        >{isDark ? '☀️' : '🌙'}</button>
         <button
           className={styles.spieltagBtn}
           onClick={() => setSelectorOpen(true)}
@@ -30,6 +41,7 @@ export function MatchdayScreen() {
           <span className={styles.spieltagBtnNr}>{spieltag}</span>
           <span className={styles.spieltagBtnLabel}>Spieltag</span>
         </button>
+        </div>
       </header>
 
       {/* Status-Chip */}
