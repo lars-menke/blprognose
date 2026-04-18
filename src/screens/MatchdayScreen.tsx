@@ -24,7 +24,7 @@ export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
       {/* Header */}
       <header className={styles.header}>
         <div>
-          <h1 className={styles.large}>Prognose</h1>
+          <h1 className={styles.large}>BLforecast</h1>
           <p className={styles.subtitle}>
             {loading ? 'Lade…' : `${spieltag}. Spieltag · Bundesliga 2025/26`}
           </p>
