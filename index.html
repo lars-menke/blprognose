@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.4.3';
+const VERSION = 'v1.4.4';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -610,10 +610,12 @@ function calcSingle(hAbb, aAbb, extP, fH, fA, drawThreshold, hForm, aForm){
   const effAGF = aForm ? (1-FORM_WEIGHT)*a.aGF + FORM_WEIGHT*aForm.gf : a.aGF;
   const effAGA = aForm ? (1-FORM_WEIGHT)*a.aGA + FORM_WEIGHT*aForm.ga : a.aGA;
 
-  const lgAvgH = 1.65;
-  const lgAvgA = 1.45;
-  const lgDefH = 1.30;
-  const lgDefA = 1.55;
+  // Liga-Durchschnitte aus ST-Daten (Saison 25/26, Stand ST23)
+  // lgAvgH/lgAvgA kürzen sich in der Formel heraus — nur lgDefH/lgDefA wirken
+  const lgAvgH = 1.64;  // Ø hGF über alle 18 Teams
+  const lgAvgA = 1.14;  // Ø aGF über alle 18 Teams
+  const lgDefH = 1.21;  // Ø hGA über alle 18 Teams (was: 1.30 → 7% zu hoch)
+  const lgDefA = 1.58;  // Ø aGA über alle 18 Teams (was: 1.55 → leicht zu niedrig)
 
   let lH = (effHGF / lgAvgH) * (effAGA / lgDefA) * lgAvgH;
   let lA = (effAGF / lgAvgA) * (effHGA / lgDefH) * lgAvgA;
@@ -727,13 +729,6 @@ function recalcAll(){
   getMatches().forEach(m => { raw[m.id] = calcSingle(m.home, m.away, m.p, null, null, null, m.hForm, m.aForm); });
 
   // Schritt 2: Score-Monokultur-Schutz
-  // Zähle wie oft jeder Score vorkommt
-  const scoreCounts = {};
-  getMatches().forEach(m => {
-    const t = raw[m.id].naturalTipp;
-    if(t) scoreCounts[t] = (scoreCounts[t]||0) + 1;
-  });
-
   const finalTipps = {};
   const assignedCounts = {};
 
@@ -985,7 +980,7 @@ function manualCalc(){
   // Fake ST-Einträge für manuelle Eingabe
   const fakeH = {rank:9, hGF:gfHH, hGA:gaHH, aGF:gfHH*.75, aGA:gaHH*1.2};
   const fakeA = {rank:9, hGF:gfAA*1.2, hGA:gaAA*.85, aGF:gfAA, aGA:gaAA};
-  const lgAvgH=1.65, lgAvgA=1.45, lgDefH=1.30, lgDefA=1.55;
+  const lgAvgH=1.64, lgAvgA=1.14, lgDefH=1.21, lgDefA=1.58;
 
   let lH=(gfHH/lgAvgH)*(gaAA/lgDefA)*lgAvgH + hB;
   let lA=(gfAA/lgAvgA)*(gaHH/lgDefH)*lgAvgA;
