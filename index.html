@@ -471,7 +471,7 @@ const NM = {
   SVW:'Werder Bremen',FCH:'1. FC Heidenheim'
 };
 
-const VERSION = 'v1.5.4';
+const VERSION = 'v1.5.5';
 
 // Vereinslogos — zur Laufzeit via openligadb befüllt (Fallback: SVG-Badge)
 const LOGOS = {};
@@ -1201,6 +1201,7 @@ const SPIELTAGE = Array.from({length:34},(_,i)=>{
 });
 
 let currentSpieltag = _currentST;
+let trueSpieltag = _currentST; // Immer der echte aktuelle Spieltag (auch nach API-Update)
 function getMatches(){ return MATCHES_BY_ST[currentSpieltag] || []; }
 
 function renderSpieltageGrid(){
@@ -1208,8 +1209,8 @@ function renderSpieltageGrid(){
   grid.innerHTML = Array.from({length:34}, (_,i) => {
     const n = i+1;
     let cls = 'st-btn';
-    if(n === currentSpieltag) cls += ' current';
-    else if(n < currentSpieltag) cls += ' past';
+    if(n === trueSpieltag) cls += ' current';
+    else if(n < trueSpieltag) cls += ' past';
     return `<button class="${cls}" onclick="selectSpieltag(${n})">${n}</button>`;
   }).join('');
 }
@@ -1220,9 +1221,9 @@ function selectSpieltag(nr){
   document.getElementById('headerSub').textContent = `${nr}. Spieltag · 2025/26`;
   document.querySelector('.spieltag-title').textContent = `Spieltag ${nr}`;
 
-  // Status dynamisch aus currentSpieltag ableiten (nicht aus statischem SPIELTAGE-Array)
-  const isPast = nr < currentSpieltag;
-  const isCurrent = nr === currentSpieltag;
+  // Status gegen den echten aktuellen Spieltag prüfen (nicht den angezeigten)
+  const isPast = nr < trueSpieltag;
+  const isCurrent = nr === trueSpieltag;
   const info = document.getElementById('stInfo');
   if(isPast){
     info.innerHTML = `<span style="color:var(--green)">✓ Spieltag ${nr} wurde bereits gespielt.</span><br>Die Prognose zeigt die damalige Modellberechnung.`;
@@ -1303,23 +1304,31 @@ function closeInfo(){
 }
 
 // ─── LOGOS VIA OPENLIGADB ────────────────────────────────────────────────────
-// Nutzt dieselbe API + TEAM_CODE_MAP wie die Spieltagsdaten-Abfrage
+// Konvertiert Wikimedia /thumb/ PNG-URLs in direkte SVG-URLs (haben CORS + kein Hotlink-Block)
+function normalizeLogoUrl(url){
+  if(!url) return url;
+  const m = url.match(/^(.+\/commons\/)thumb\/(.+\.svg)\/\d+px-.+\.png$/);
+  return m ? m[1]+m[2] : url;
+}
+
 async function fetchLogos(){
   try {
     const r = await fetch(`${OLDB_BASE}/getavailableteams/${OLDB_LEAGUE}/${OLDB_SEASON}`);
     if(!r.ok) return;
     const teams = await r.json();
-    // Erst alle URLs setzen (Fallback), dann als Blobs laden (kein Referer-Header → kein Hotlink-Block)
+    // URLs normalisieren: /thumb/ PNG → direkte SVG (haben access-control-allow-origin: *)
     teams.forEach(t => {
       const code = resolveCode(t);
-      if(code && t.teamIconUrl) LOGOS[code] = t.teamIconUrl;
+      if(code && t.teamIconUrl) LOGOS[code] = normalizeLogoUrl(t.teamIconUrl);
     });
     renderGames(); renderSummary();
+    // Als Blobs laden: direkte SVG-URLs haben CORS → kein Referer gesendet → zuverlässig
     await Promise.allSettled(teams.map(async t => {
       const code = resolveCode(t);
       if(!code || !t.teamIconUrl) return;
       try {
-        const ir = await fetch(t.teamIconUrl, {referrerPolicy:'no-referrer'});
+        const url = normalizeLogoUrl(t.teamIconUrl);
+        const ir = await fetch(url, {referrerPolicy:'no-referrer'});
         if(!ir.ok) return;
         LOGOS[code] = URL.createObjectURL(await ir.blob());
       } catch{}
@@ -1347,6 +1356,7 @@ async function initApp(){
         .every(m => m.matchIsFinished);
       // Alle Spiele des Spieltags beendet → nächsten Spieltag zeigen (ab Montag)
       currentSpieltag = (allFinished && latest < 34) ? latest + 1 : latest;
+      trueSpieltag = currentSpieltag;
     }
   } catch(e){ /* Kein Netz: _currentST bleibt als Fallback */ }
 
