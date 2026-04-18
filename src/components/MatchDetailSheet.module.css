@@ -1,137 +1,146 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   z-index: 200;
   display: flex;
   align-items: flex-end;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fadeIn 0.18s ease;
 }
 
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .sheet {
-  background: var(--bg-primary);
+  background: var(--bg-page);
   border-radius: 20px 20px 0 0;
   width: 100%;
   max-height: 92dvh;
   overflow-y: auto;
-  padding: 8px 0 env(safe-area-inset-bottom, 16px);
-  animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   -webkit-overflow-scrolling: touch;
+  animation: slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @keyframes slideUp {
   from { transform: translateY(100%); }
-  to { transform: translateY(0); }
 }
 
 .handle {
   width: 36px;
-  height: 4px;
-  background: var(--separator);
-  border-radius: 2px;
-  margin: 4px auto 16px;
+  height: 5px;
+  background: var(--separator-opaque);
+  border-radius: 3px;
+  margin: 10px auto 0;
 }
 
-/* Match header */
+/* ── Match Header ── */
 .matchHead {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-3);
-  border-bottom: 1px solid var(--separator);
+  padding: var(--space-4) var(--space-5) var(--space-4);
 }
 
 .teamCol {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   text-align: center;
 }
 
 .teamName {
   font-size: var(--size-caption-1);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   color: var(--text-primary);
   line-height: 1.2;
 }
 
 .tippCol {
   text-align: center;
+  padding: 0 var(--space-2);
 }
 
 .tippScore {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: var(--weight-bold);
   color: var(--text-primary);
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.5px;
+  letter-spacing: -1px;
 }
 
 .tippMeta {
   font-size: var(--size-caption-2);
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-top: 5px;
 }
 
-/* Sections */
-.section {
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--separator);
-}
-
-.sectionTitle {
-  font-size: var(--size-caption-1);
+/* ── Sections (iOS insetGrouped style) ── */
+.sectionLabel {
+  font-size: var(--size-footnote);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
+  padding: var(--space-4) var(--space-5) var(--space-1);
+}
+
+.sectionCard {
+  background: var(--bg-card);
+  margin: 0 var(--space-4);
+  border-radius: var(--radius-card);
+  overflow: hidden;
   margin-bottom: var(--space-2);
 }
 
-/* 1X2 Probs */
+/* ── 1X2 Probs ── */
 .probs {
   display: flex;
   justify-content: space-around;
-  margin-bottom: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
 }
 
 .prob {
   text-align: center;
+  flex: 1;
 }
 
 .probVal {
-  font-size: var(--size-title-2);
+  font-size: var(--size-title-1);
   font-weight: var(--weight-bold);
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .probLbl {
-  font-size: var(--size-caption-2);
+  font-size: var(--size-caption-1);
   color: var(--text-secondary);
-  margin-top: 2px;
+  margin-top: 3px;
+}
+
+.probSep {
+  width: 1px;
+  background: var(--separator);
+  align-self: stretch;
 }
 
 .probBar {
   display: flex;
-  height: 6px;
-  border-radius: 3px;
+  height: 4px;
+  margin: 0 var(--space-4) var(--space-4);
+  border-radius: 2px;
   overflow: hidden;
   gap: 1px;
 }
 
 .probBarH {
   background: var(--system-blue);
-  border-radius: 3px 0 0 3px;
+  border-radius: 2px 0 0 2px;
 }
 
 .probBarD {
@@ -140,23 +149,17 @@
 
 .probBarA {
   background: var(--system-orange);
-  border-radius: 0 3px 3px 0;
-  flex: 1; /* fills rest */
+  border-radius: 0 2px 2px 0;
+  flex: 1;
 }
 
-/* Rows */
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
+/* ── Rows (model params) ── */
 .row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--separator);
+  align-items: center;
+  padding: 11px var(--space-4);
+  border-bottom: var(--hairline) solid var(--separator);
 }
 
 .row:last-child {
@@ -164,12 +167,12 @@
 }
 
 .rowLabel {
-  font-size: var(--size-subhead);
+  font-size: var(--size-body);
   color: var(--text-secondary);
 }
 
 .rowValue {
-  font-size: var(--size-subhead);
+  font-size: var(--size-body);
   color: var(--text-primary);
   font-weight: var(--weight-medium);
 }
@@ -178,51 +181,50 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Rules */
-.rules {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
+/* ── Rules ── */
 .rule {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
-  background: var(--bg-fill);
-  border-radius: var(--radius-small);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--hairline) solid var(--separator);
+}
+
+.rule:last-child {
+  border-bottom: none;
 }
 
 .ruleIcon {
-  font-size: 16px;
+  font-size: 17px;
   flex-shrink: 0;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
-.rule > span:last-child {
-  font-size: var(--size-caption-1);
+.ruleText {
+  font-size: var(--size-subhead);
   color: var(--text-primary);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-/* Score grid */
+/* ── Score Grid ── */
 .scoreGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  padding: var(--space-3) var(--space-3);
   gap: var(--space-2);
 }
 
 .scoreCell {
   background: var(--bg-fill);
-  border-radius: var(--radius-small);
-  padding: var(--space-2);
+  border-radius: var(--radius-button);
+  padding: var(--space-2) var(--space-1);
   text-align: center;
 }
 
 .scoreCellActive {
   background: color-mix(in srgb, var(--system-blue) 18%, transparent);
   outline: 1.5px solid var(--system-blue);
+  outline-offset: -1.5px;
 }
 
 .scoreCellScore {
@@ -238,22 +240,23 @@
   margin-top: 2px;
 }
 
-/* Close button */
+/* ── Close Button ── */
 .closeBtn {
   display: block;
   width: calc(100% - 2 * var(--space-4));
-  margin: var(--space-3) var(--space-4) var(--space-2);
-  background: var(--bg-fill);
-  border: none;
-  border-radius: var(--radius-button);
+  margin: var(--space-3) var(--space-4);
+  margin-bottom: max(var(--space-5), env(safe-area-inset-bottom, var(--space-5)));
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
   color: var(--system-blue);
   font-size: var(--size-body);
   font-weight: var(--weight-semibold);
-  padding: var(--space-3);
+  padding: var(--space-4);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.1s;
 }
 
 .closeBtn:active {
-  opacity: 0.7;
+  opacity: 0.6;
 }
