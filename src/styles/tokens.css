@@ -1,0 +1,173 @@
+/* ==========================================================================
+   BL Prognose · Design Tokens
+   Apple iOS Designsprache, Light + Dark Mode automatisch.
+   ========================================================================== */
+
+:root {
+  /* ---------- Hintergründe (Light) ---------- */
+  --bg-page:        #F2F2F7;
+  --bg-card:        #FFFFFF;
+  --bg-fill:        rgba(118, 118, 128, 0.12);
+  --bg-fill-strong: rgba(118, 118, 128, 0.24);
+  --bg-track:       #F2F2F7;
+  --bg-tabbar:      rgba(249, 249, 249, 0.94);
+
+  /* ---------- Text (Light) ---------- */
+  --text-primary:   #000000;
+  --text-secondary: #8E8E93;
+  --text-tertiary:  #C7C7CC;
+  --text-on-accent: #FFFFFF;
+
+  /* ---------- Systemfarben (Light) ---------- */
+  --system-blue:    #007AFF;
+  --system-green:   #34C759;
+  --system-orange:  #FF9500;
+  --system-red:     #FF3B30;
+  --system-yellow:  #FFCC00;
+  --system-teal:    #5AC8FA;
+  --system-gray:    #8E8E93;
+
+  /* Neutral im Progress-Track für Unentschieden */
+  --system-neutral: #C7C7CC;
+
+  /* ---------- Trennlinien ---------- */
+  --separator:        rgba(60, 60, 67, 0.18);
+  --separator-opaque: rgba(60, 60, 67, 0.36);
+
+  /* ---------- Typografie ---------- */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Roboto Mono',
+    Consolas, monospace;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --size-large-title: 30px;
+  --size-title-1:     24px;
+  --size-title-2:     20px;
+  --size-headline:    17px;
+  --size-body:        15px;
+  --size-callout:     14px;
+  --size-subhead:     13px;
+  --size-footnote:    12px;
+  --size-caption-1:   11px;
+  --size-caption-2:   10px;
+
+  /* ---------- Radien ---------- */
+  --radius-card:            12px;
+  --radius-control:         9px;
+  --radius-segmented-thumb: 7px;
+  --radius-button:          8px;
+  --radius-logo:            4px;
+  --radius-pill:            999px;
+
+  /* ---------- Abstände (4er-Raster) ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* ---------- Linien ---------- */
+  --hairline: 0.33px;
+
+  /* ---------- Schatten ---------- */
+  /* Wird praktisch nicht gebraucht, nur für Focus-Ringe. */
+  --focus-ring: 0 0 0 3px rgba(0, 122, 255, 0.4);
+
+  /* ---------- Icon-Palette ---------- */
+  --icon-bg:     #0A1628;
+  --icon-accent: #F4C430;
+  --icon-white:  #FFFFFF;
+}
+
+/* ==========================================================================
+   Dark Mode
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page:        #000000;
+    --bg-card:        #1C1C1E;
+    --bg-fill:        rgba(118, 118, 128, 0.24);
+    --bg-fill-strong: rgba(118, 118, 128, 0.36);
+    --bg-track:       #2C2C2E;
+    --bg-tabbar:      rgba(28, 28, 30, 0.94);
+
+    --text-primary:   #FFFFFF;
+    --text-secondary: #98989E;
+    --text-tertiary:  #48484A;
+
+    --system-blue:    #0A84FF;
+    --system-green:   #30D158;
+    --system-orange:  #FF9F0A;
+    --system-red:     #FF453A;
+    --system-yellow:  #FFD60A;
+    --system-teal:    #64D2FF;
+    --system-gray:    #98989E;
+
+    --system-neutral: #636366;
+
+    --separator:        rgba(84, 84, 88, 0.65);
+    --separator-opaque: rgba(84, 84, 88, 0.85);
+  }
+}
+
+/* Für manuelles Toggle statt Media Query: Klasse auf <html> */
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-page:        #000000;
+  --bg-card:        #1C1C1E;
+  --bg-fill:        rgba(118, 118, 128, 0.24);
+  --bg-fill-strong: rgba(118, 118, 128, 0.36);
+  --bg-track:       #2C2C2E;
+  --bg-tabbar:      rgba(28, 28, 30, 0.94);
+  --text-primary:   #FFFFFF;
+  --text-secondary: #98989E;
+  --text-tertiary:  #48484A;
+  --system-blue:    #0A84FF;
+  --system-green:   #30D158;
+  --system-orange:  #FF9F0A;
+  --system-red:     #FF453A;
+  --system-yellow:  #FFD60A;
+  --system-teal:    #64D2FF;
+  --system-gray:    #98989E;
+  --system-neutral: #636366;
+  --separator:        rgba(84, 84, 88, 0.65);
+  --separator-opaque: rgba(84, 84, 88, 0.85);
+}
+
+/* ==========================================================================
+   Vereinsfarben
+   ========================================================================== */
+
+:root {
+  --club-fcb:       #DC052D;
+  --club-b04:       #E32221;
+  --club-rbl:       #DD0741;
+  --club-sge:       #E1000F;
+  --club-vfb:       #E30613;
+  --club-bvb:       #FDE100;
+  --club-bvb-text:  #000000;
+  --club-fca:       #BA3733;
+  --club-bmg:       #00A651;
+  --club-wob:       #65B32E;
+  --club-scf:       #D50C1D;
+  --club-svw:       #1D9053;
+  --club-tsg:       #1961B5;
+  --club-mai:       #C3141B;
+  --club-hei:       #E2001A;
+  --club-bsc:       #004D9E;
+  --club-hsv:       #0A3375;
+  --club-s04:       #1560BD;
+  --club-koe:       #ED1C24;
+  --club-sgf:       #CC2229;
+}

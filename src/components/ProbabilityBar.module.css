@@ -1,0 +1,24 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.bar {
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg-track);
+}
+
+.home { background: var(--system-green); }
+.draw { background: var(--system-neutral); }
+.away { background: var(--system-orange); }
+
+.labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--size-caption-2);
+  color: var(--text-secondary);
+}

@@ -1,0 +1,10 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-logo);
+  font-weight: var(--weight-bold);
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+  font-feature-settings: 'tnum' on;
+}
