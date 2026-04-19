@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { Club } from '../lib/clubs';
 import styles from './TeamLogo.module.css';
@@ -10,10 +11,26 @@ type Props = {
   size?: Size;
 };
 
-const PIXEL: Record<Size, number> = { sm: 20, md: 28, lg: 40 };
+const PIXEL: Record<Size, number> = { sm: 24, md: 32, lg: 44 };
 
 export function TeamLogo({ club, logoUrl, size = 'sm' }: Props) {
+  const [failed, setFailed] = useState(false);
   const px = PIXEL[size];
+
+  if (logoUrl && !failed) {
+    return (
+      <img
+        className={styles.logo}
+        src={logoUrl}
+        alt={club.fullName}
+        width={px}
+        height={px}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
   const badgeStyle: CSSProperties = {
     width: px,
     height: px,
@@ -21,25 +38,6 @@ export function TeamLogo({ club, logoUrl, size = 'sm' }: Props) {
     color: club.textOnColor === 'dark' ? '#000' : '#fff',
     fontSize: Math.round(px * 0.36),
   };
-
-  if (logoUrl) {
-    return (
-      <span className={styles.wrap} style={{ width: px, height: px }}>
-        <img
-          className={styles.img}
-          src={logoUrl}
-          alt={club.fullName}
-          width={px}
-          height={px}
-          referrerPolicy="no-referrer"
-          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-        />
-        <span className={styles.badge} style={badgeStyle} aria-hidden="true">
-          {club.code}
-        </span>
-      </span>
-    );
-  }
 
   return (
     <span className={styles.badge} style={badgeStyle} aria-label={club.fullName}>
