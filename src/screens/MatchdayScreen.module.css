@@ -46,6 +46,12 @@
   margin: var(--space-1) 0 0;
 }
 
+.version {
+  font-size: var(--size-caption-2);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
 .headerActions {
   display: flex;
   align-items: flex-start;
@@ -133,8 +139,11 @@
 }
 
 .chipMarket {
-  background: color-mix(in srgb, var(--system-green) 12%, transparent);
-  color: var(--system-green);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: var(--size-caption-2);
+  font-weight: var(--weight-regular);
+  padding: 2px 4px;
 }
 
 /* ── Match-Liste ── */
