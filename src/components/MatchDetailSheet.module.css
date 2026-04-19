@@ -102,6 +102,46 @@
   margin-bottom: var(--space-2);
 }
 
+/* ── Kategorie ── */
+.catRow {
+  padding: var(--space-3) var(--space-4);
+}
+
+.catBadges {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.catBadge {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--size-footnote);
+  font-weight: var(--weight-semibold);
+}
+
+.catFav  { background: color-mix(in srgb, var(--system-blue) 14%, transparent); color: var(--system-blue); }
+.catMid  { background: color-mix(in srgb, var(--system-orange) 14%, transparent); color: var(--system-orange); }
+.catFifty { background: var(--bg-fill); color: var(--text-secondary); }
+.catBadgeTop {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--size-footnote);
+  font-weight: var(--weight-semibold);
+  background: color-mix(in srgb, var(--system-yellow) 22%, transparent);
+  color: color-mix(in srgb, var(--system-yellow) 70%, #6b4a00);
+}
+
+@media (prefers-color-scheme: dark) { .catBadgeTop { color: var(--system-yellow); } }
+html[data-theme='dark'] .catBadgeTop { color: var(--system-yellow); }
+
+.catDesc {
+  font-size: var(--size-subhead);
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
 /* ── 1X2 Probs ── */
 .probs {
   display: flex;

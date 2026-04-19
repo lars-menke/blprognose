@@ -46,10 +46,12 @@
   margin: var(--space-1) 0 0;
 }
 
-.version {
+.footer {
+  text-align: center;
   font-size: var(--size-caption-2);
   color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
+  padding: var(--space-4) var(--space-4) max(var(--space-6), env(safe-area-inset-bottom, var(--space-6)));
+  margin-top: auto;
 }
 
 .headerActions {

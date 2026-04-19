@@ -101,6 +101,12 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
           </div>
         </div>
 
+        {/* Tipp-Kategorie Erklärung */}
+        <div className={styles.sectionLabel}>Einschätzung</div>
+        <div className={styles.sectionCard}>
+          <CategoryRow fp={result.fp} topTip={result.fp >= 0.70} />
+        </div>
+
         {/* 1X2 */}
         <div className={styles.sectionLabel}>Wahrscheinlichkeit</div>
         <div className={styles.sectionCard}>
@@ -201,6 +207,29 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
 
         <button className={styles.closeBtn} onClick={onClose}>Schließen</button>
       </div>
+    </div>
+  );
+}
+
+function CategoryRow({ fp, topTip }: { fp: number; topTip: boolean }) {
+  type Cat = { label: string; cls: string; desc: string };
+  const cat: Cat =
+    fp >= 0.70 ? { label: 'Favorit', cls: styles.catFav, desc: `Klarer Favorit — das Modell sieht eine Seite mit ≥70% Siegwahrscheinlichkeit (hier: ${(fp * 100).toFixed(0)}%). Hohe Konfidenz, aber kein Freifahrtschein.` }
+    : fp >= 0.55 ? { label: 'Kante', cls: styles.catMid, desc: `Leichter Vorteil — eine Seite hat 55–69% Siegchance (hier: ${(fp * 100).toFixed(0)}%). Tendenz klar, Ausgang offen.` }
+    : { label: '50/50', cls: styles.catFifty, desc: `Ausgeglichenes Spiel — keine Seite hat mehr als 55% Chance (hier: ${(fp * 100).toFixed(0)}%). Jedes Ergebnis ist realistisch.` };
+
+  return (
+    <div className={styles.catRow}>
+      <div className={styles.catBadges}>
+        <span className={`${styles.catBadge} ${cat.cls}`}>{cat.label}</span>
+        {topTip && <span className={styles.catBadgeTop}>TOP</span>}
+      </div>
+      <p className={styles.catDesc}>{cat.desc}</p>
+      {topTip && (
+        <p className={styles.catDesc} style={{ marginTop: 4 }}>
+          <strong>TOP-Tipp</strong> — Spiele mit ≥70% Favorit-Wahrscheinlichkeit. Die stärksten Prognosen des Spieltags.
+        </p>
+      )}
     </div>
   );
 }
