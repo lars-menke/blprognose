@@ -8,6 +8,7 @@
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation: fadeIn 0.18s ease;
+  touch-action: none;
 }
 
 @keyframes fadeIn {
@@ -21,7 +22,10 @@
   max-height: 92dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   animation: slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @keyframes slideUp {

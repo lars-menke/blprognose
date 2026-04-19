@@ -64,7 +64,7 @@ export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, top
             <div className={styles.scoreValue} data-numeric>
               {isNaN(hg) ? '?' : hg}:{isNaN(ag) ? '?' : ag}
             </div>
-            <div className={styles.scoreLabel}>{OUTCOME_LABEL[result.wo] ?? 'Prognose'}</div>
+            <div className={styles.scoreLabel}>{OUTCOME_LABEL[result.wo] ?? 'Tipp'}</div>
           </div>
         </div>
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { Club } from '../lib/clubs';
 import type { MatchResult } from '../lib/poisson';
 import { TeamLogo } from './TeamLogo';
@@ -21,9 +22,65 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
   const topScores = result.srt.slice(0, 8);
   const hasRules = result.drawBlocked || result.goalRuleApplied || result.favScoreRuleApplied || result.adjusted;
 
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const startY = useRef(0);
+  const dragging = useRef(false);
+  const [dragY, setDragY] = useState(0);
+
+  // Lock body scroll while sheet is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Native touchmove listener with passive:false so preventDefault works
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+
+    function onTouchMove(e: TouchEvent) {
+      if (!dragging.current) return;
+      const delta = e.touches[0].clientY - startY.current;
+      if (delta <= 0) { dragging.current = false; setDragY(0); return; }
+      e.preventDefault();
+      setDragY(delta);
+    }
+
+    sheet.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => sheet.removeEventListener('touchmove', onTouchMove);
+  }, []);
+
+  function onTouchStart(e: React.TouchEvent) {
+    const sheet = sheetRef.current;
+    if (!sheet || sheet.scrollTop > 2) return;
+    startY.current = e.touches[0].clientY;
+    dragging.current = true;
+  }
+
+  function onTouchEnd() {
+    dragging.current = false;
+    if (dragY > 90) {
+      onClose();
+    } else {
+      setDragY(0);
+    }
+  }
+
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.sheet} onClick={e => e.stopPropagation()}>
+    <div
+      className={styles.overlay}
+      onClick={onClose}
+      onTouchMove={e => e.preventDefault()}
+    >
+      <div
+        ref={sheetRef}
+        className={styles.sheet}
+        onClick={e => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        style={dragY > 0 ? { transform: `translateY(${dragY}px)`, transition: 'none' } : undefined}
+      >
         <div className={styles.handle} />
 
         {/* Teams + Tipp */}
@@ -73,26 +130,10 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
         {/* Modell-Parameter */}
         <div className={styles.sectionLabel}>Modell</div>
         <div className={styles.sectionCard}>
-          <Row
-            label="λ Heim"
-            desc="Erwartete Tore des Heimteams (Poisson-Mittelwert)"
-            value={lbl(result.lH)}
-          />
-          <Row
-            label="λ Gast"
-            desc="Erwartete Tore des Gastes (Poisson-Mittelwert)"
-            value={lbl(result.lA)}
-          />
-          <Row
-            label="Dixon-Coles ρ"
-            desc="Korrektur für 0:0 und 1:0 / 0:1 — niedrige Scores treten häufiger auf als Poisson vorhersagt"
-            value="−0.13"
-          />
-          <Row
-            label="λ-Differenz"
-            desc="Abstand der erwarteten Torwerte — je kleiner, desto ausgeglichener"
-            value={lbl(result.lambdaDiff)}
-          />
+          <Row label="λ Heim" desc="Erwartete Tore des Heimteams (Poisson-Mittelwert)" value={lbl(result.lH)} />
+          <Row label="λ Gast" desc="Erwartete Tore des Gastes (Poisson-Mittelwert)" value={lbl(result.lA)} />
+          <Row label="Dixon-Coles ρ" desc="Korrektur für 0:0 und 1:1 — niedrige Scores treten häufiger auf als Poisson vorhersagt" value="−0.13" />
+          <Row label="λ-Differenz" desc="Abstand der erwarteten Torwerte — je kleiner, desto ausgeglichener" value={lbl(result.lambdaDiff)} />
           <Row
             label="Remis-Schwelle"
             desc={`Mindest-Remiswahrscheinlichkeit für einen X-Tipp${result.lambdaDiff < 0.25 ? ' — engeres Fenster wegen ausgeglichener Stärke' : ''}`}

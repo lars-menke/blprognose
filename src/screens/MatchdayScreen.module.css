@@ -18,6 +18,19 @@
   border-bottom: var(--hairline) solid var(--separator);
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.titleIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
 .large {
   font-size: var(--size-large-title);
   font-weight: var(--weight-bold);
