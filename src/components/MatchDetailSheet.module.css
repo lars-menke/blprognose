@@ -58,7 +58,7 @@
 }
 
 .teamName {
-  font-size: var(--size-caption-1);
+  font-size: var(--size-subhead);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
   line-height: 1.2;
@@ -194,7 +194,6 @@ html[data-theme='dark'] .catBadgeTop { color: var(--system-yellow); }
 .probBarA {
   background: var(--system-orange);
   border-radius: 0 2px 2px 0;
-  flex: 1;
 }
 
 /* ── Rows (model params) ── */

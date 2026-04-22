@@ -19,6 +19,6 @@
 .labels {
   display: flex;
   justify-content: space-between;
-  font-size: var(--size-caption-2);
+  font-size: var(--size-caption-1);
   color: var(--text-secondary);
 }

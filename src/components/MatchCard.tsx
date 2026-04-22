@@ -40,10 +40,6 @@ export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, top
           <div className={styles.badges}>
             {topTip && <span className={`${styles.badge} ${styles.badgeTop}`}>TOP</span>}
             <span className={`${styles.badge} ${styles[cat.badge]}`}>{cat.label}</span>
-            {result.drawBlocked && <span className={`${styles.badge} ${styles.badgeInfo}`}>X gesperrt</span>}
-            {result.goalRuleApplied && <span className={`${styles.badge} ${styles.badgeInfo}`}>⚽</span>}
-            {result.favScoreRuleApplied && <span className={`${styles.badge} ${styles.badgeInfo}`}>2+</span>}
-            {result.adjusted && <span className={`${styles.badge} ${styles.badgeMono}`}>🔀</span>}
           </div>
         </div>
 

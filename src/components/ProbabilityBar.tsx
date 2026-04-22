@@ -18,9 +18,9 @@ export function ProbabilityBar({ home, draw, away, showLabels = true }: Props) {
       </div>
       {showLabels && (
         <div className={styles.labels} data-numeric>
-          <span>{toPct(home)}% H</span>
-          <span>{toPct(draw)}% U</span>
-          <span>{toPct(away)}% A</span>
+          <span>{toPct(home)}% 1</span>
+          <span>{toPct(draw)}% X</span>
+          <span>{toPct(away)}% 2</span>
         </div>
       )}
     </div>
