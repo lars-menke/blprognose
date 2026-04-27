@@ -150,6 +150,11 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
             desc="Newton-Raphson-Kalibrierung auf Buchmacher-Quoten — passt λH und λA iterativ an bis Modell mit Markt übereinstimmt"
             value={result.marketApplied ? 'aktiv' : 'inaktiv'}
           />
+          <Row
+            label="Platt-Kalibrierung"
+            desc="Korrigiert Modell-Wahrscheinlichkeiten anhand vergangener Spieltage dieser Saison — reduziert Über-Konfidenz bei hohen Werten"
+            value={result.calibrated ? 'aktiv' : result.marketApplied ? 'n/a (Markt)' : 'Fallback'}
+          />
         </div>
 
         {/* Aktive Regeln */}
