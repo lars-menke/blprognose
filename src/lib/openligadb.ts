@@ -197,22 +197,10 @@ export async function fetchLogos(): Promise<Record<string, string>> {
     const r = await fetch(`${OLDB_BASE}/getavailableteams/${OLDB_LEAGUE}/${OLDB_SEASON}`);
     if (!r.ok) return logos;
     const teams: Array<{ teamName: string; shortName: string; teamIconUrl: string }> = await r.json();
-
     teams.forEach(t => {
       const code = resolveCode(t);
       if (code && t.teamIconUrl) logos[code] = normalizeLogoUrl(t.teamIconUrl);
     });
-
-    await Promise.allSettled(teams.map(async t => {
-      const code = resolveCode(t);
-      if (!code || !t.teamIconUrl) return;
-      try {
-        const url = normalizeLogoUrl(t.teamIconUrl);
-        const ir = await fetch(url, { referrerPolicy: 'no-referrer' });
-        if (!ir.ok) return;
-        logos[code] = URL.createObjectURL(await ir.blob());
-      } catch { /* CORS-Block → direkter Fallback bleibt */ }
-    }));
   } catch { /* kein Netz → leeres Objekt */ }
   return logos;
 }
