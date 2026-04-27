@@ -1,9 +1,11 @@
 // ─── POISSON-MODELL MIT DIXON-COLES-KORREKTUR ────────────────────────────────
+import type { CalibParams } from './calibration';
+import { applyCalib, shrinkToMean } from './calibration';
 
 export const DC_RHO = -0.13;
 export const FORM_WEIGHT = 0.40;
-export const DRAW_THRESHOLD = 0.30;
-export const DRAW_THRESHOLD_TIGHT = 0.27;
+export const DRAW_THRESHOLD = 0.23;
+export const DRAW_THRESHOLD_TIGHT = 0.20;
 export const FAV_MIN_GOALS_LAMBDA = 2.0;
 export const MONO_MAX = 2;
 export const LG_DEF_H = 1.21; // Ø hGA über alle BL1-Teams
@@ -34,6 +36,7 @@ export type CalcResult = {
   lambdaDiff: number;
   effectiveDrawThreshold: number;
   marketApplied: boolean;
+  calibrated: boolean;
 };
 
 export type MatchResult = CalcResult & {
@@ -104,6 +107,7 @@ export function calcSingle(
   drawThreshold: number | null,
   hForm: FormData,
   aForm: FormData,
+  calib: CalibParams | null = null,
 ): CalcResult {
   const effHGF = hForm ? (1 - FORM_WEIGHT) * h.hGF + FORM_WEIGHT * hForm.gf : h.hGF;
   const effHGA = hForm ? (1 - FORM_WEIGHT) * h.hGA + FORM_WEIGHT * hForm.ga : h.hGA;
@@ -117,13 +121,28 @@ export function calcSingle(
   lH = Math.max(0.3, Math.min(4.5, mc.lH));
   lA = Math.max(0.3, Math.min(4.5, mc.lA));
 
-  const { sc, pH, pD, pA } = poisMatrix(lH, lA);
+  const { sc, pH: rawPH, pD: rawPD, pA: rawPA } = poisMatrix(lH, lA);
   const srt = Object.entries(sc).sort((x, y) => y[1] - x[1]) as Array<[string, number]>;
 
+  // Calibration: Platt scaling from past results, or regression-to-mean fallback.
+  // Skip when market correction was applied (market already calibrates).
+  let pH = rawPH, pD = rawPD, pA = rawPA;
+  let calibrated = false;
+  if (!extP) {
+    if (calib) {
+      ({ pH, pD, pA } = applyCalib(rawPH, rawPD, rawPA, calib));
+      calibrated = true;
+    } else {
+      ({ pH, pD, pA } = shrinkToMean(rawPH, rawPD, rawPA));
+    }
+  }
+
   const lambdaDiff = Math.abs(lH - lA);
+  // When calibration compresses pD toward ~22%, lower the threshold accordingly
+  const baseThreshold = lambdaDiff < 0.25 ? DRAW_THRESHOLD_TIGHT : DRAW_THRESHOLD;
   const effectiveDrawThreshold = drawThreshold != null
     ? drawThreshold
-    : (lambdaDiff < 0.25 ? DRAW_THRESHOLD_TIGHT : DRAW_THRESHOLD);
+    : calibrated ? baseThreshold * 0.78 : baseThreshold;
 
   let wo: Outcome = pH > pD && pH > pA ? 'H' : pA > pD && pA > pH ? 'A' : 'D';
   let drawBlocked = false;
@@ -177,6 +196,7 @@ export function calcSingle(
     drawBlocked, goalRuleApplied, favScoreRuleApplied,
     lambdaDiff, effectiveDrawThreshold,
     marketApplied: extP !== null,
+    calibrated,
   };
 }
 
@@ -184,6 +204,7 @@ export function recalcMatches(
   matches: Array<{ id: string; home: string; away: string; p: MarketProbs | null; hForm: FormData; aForm: FormData }>,
   stData: Record<string, TeamStats>,
   fallbackStats: Record<string, TeamStats>,
+  calib: CalibParams | null = null,
 ): Record<string, MatchResult> {
   const DEFAULT: TeamStats = { rank: 9, hGF: 1.3, hGA: 1.4, aGF: 1.1, aGA: 1.5 };
 
@@ -191,7 +212,7 @@ export function recalcMatches(
   matches.forEach(m => {
     const h = stData[m.home] ?? fallbackStats[m.home] ?? DEFAULT;
     const a = stData[m.away] ?? fallbackStats[m.away] ?? DEFAULT;
-    raw[m.id] = calcSingle(h, a, m.p, null, m.hForm, m.aForm);
+    raw[m.id] = calcSingle(h, a, m.p, null, m.hForm, m.aForm, calib);
   });
 
   // Monokultur-Schutz: reihenfolgeunabhängig via Konfidenz-Priorität

@@ -12,7 +12,7 @@ type Props = {
 };
 
 export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
-  const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, hasMarket, setSpielTag } = useMatchday();
+  const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, hasMarket, hasCalib, setSpielTag } = useMatchday();
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<MatchdayEntry | null>(null);
 
@@ -66,6 +66,7 @@ export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
           {isPast && <span className={styles.chipPast}>Gespielt</span>}
           {!isCurrent && !isPast && <span className={styles.chipFuture}>Ausstehend</span>}
           {hasMarket && <span className={styles.chipMarket}>📊 Marktquoten aktiv</span>}
+          {hasCalib && <span className={styles.chipCalib}>🎯 Kalibriert</span>}
           {hasMono && <span className={styles.chipMono}>🔀 Monokultur-Schutz aktiv</span>}
         </div>
       )}

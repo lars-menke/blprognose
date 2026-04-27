@@ -141,14 +141,20 @@ export function buildForm(all: OldbMatch[], code: string, beforeNr: number, home
 
   if (!prev.length) return null;
 
+  // Exponential decay: most recent game = weight 1.0, each older = * 0.72
+  const DECAY = 0.72;
+  const weights = prev.map((_, i) => Math.pow(DECAY, i));
+  const totalW = weights.reduce((s, w) => s + w, 0);
+
   let gf = 0, ga = 0;
-  prev.forEach(m => {
+  prev.forEach((m, i) => {
     const res = getFinalGoals(m)!;
     const isHome = resolveCode(m.team1) === code;
-    gf += isHome ? res.g1 : res.g2;
-    ga += isHome ? res.g2 : res.g1;
+    const w = weights[i] / totalW;
+    gf += (isHome ? res.g1 : res.g2) * w;
+    ga += (isHome ? res.g2 : res.g1) * w;
   });
-  return { gf: +(gf / prev.length).toFixed(2), ga: +(ga / prev.length).toFixed(2) };
+  return { gf: +gf.toFixed(2), ga: +ga.toFixed(2) };
 }
 
 export function buildMatchEntries(
