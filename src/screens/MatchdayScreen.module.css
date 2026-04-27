@@ -141,11 +141,12 @@
 }
 
 .chipMarket {
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: var(--size-caption-2);
-  font-weight: var(--weight-regular);
-  padding: 2px 4px;
+  background: color-mix(in srgb, var(--system-green) 12%, transparent);
+  color: var(--system-green);
+  font-size: var(--size-caption-1);
+  font-weight: var(--weight-medium);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
 }
 
 /* ── Match-Liste ── */
