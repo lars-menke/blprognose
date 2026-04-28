@@ -12,6 +12,7 @@ type Props = {
   homeLogo?: string;
   awayLogo?: string;
   topTip?: boolean;
+  actual?: { g1: number; g2: number } | null;
   onClick?: () => void;
 };
 
@@ -25,12 +26,18 @@ function category(fp: number): Cat {
   return { label: '50/50', badge: 'badgeFifty', stripe: 'accentFifty' };
 }
 
-export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, topTip, onClick }: Props) {
+export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, topTip, actual, onClick }: Props) {
   const [hg, ag] = (result.tipp ?? '?').split(':').map(Number);
   const cat = category(result.fp);
 
+  const actualOutcome = actual
+    ? actual.g1 > actual.g2 ? 'H' : actual.g1 < actual.g2 ? 'A' : 'D'
+    : null;
+  const correct = actualOutcome !== null && actualOutcome === result.wo;
+  const incorrect = actualOutcome !== null && actualOutcome !== result.wo;
+
   return (
-    <button className={styles.card} onClick={onClick} type="button">
+    <button className={`${styles.card}${topTip ? ` ${styles.cardTop}` : ''}`} onClick={onClick} type="button">
       <div className={`${styles.accentStripe} ${styles[cat.stripe]}`} />
 
       <div className={styles.inner}>
@@ -57,10 +64,24 @@ export function MatchCard({ home, away, kickoff, result, homeLogo, awayLogo, top
           </div>
 
           <div className={styles.score}>
-            <div className={styles.scoreValue} data-numeric>
-              {isNaN(hg) ? '?' : hg}:{isNaN(ag) ? '?' : ag}
-            </div>
-            <div className={styles.scoreLabel}>{OUTCOME_LABEL[result.wo] ?? 'Tipp'}</div>
+            {actual ? (
+              <>
+                <div className={`${styles.scoreValue} ${correct ? styles.scoreCorrect : styles.scoreIncorrect}`} data-numeric>
+                  {actual.g1}:{actual.g2}
+                </div>
+                <div className={`${styles.scoreLabel} ${correct ? styles.scoreLabelCorrect : incorrect ? styles.scoreLabelIncorrect : ''}`}>
+                  {correct ? '✓ Richtig' : '✗ Falsch'}
+                </div>
+                <div className={styles.tippSmall} data-numeric>Tipp {isNaN(hg) ? '?' : hg}:{isNaN(ag) ? '?' : ag}</div>
+              </>
+            ) : (
+              <>
+                <div className={styles.scoreValue} data-numeric>
+                  {isNaN(hg) ? '?' : hg}:{isNaN(ag) ? '?' : ag}
+                </div>
+                <div className={styles.scoreLabel}>{OUTCOME_LABEL[result.wo] ?? 'Tipp'}</div>
+              </>
+            )}
           </div>
         </div>
 

@@ -158,6 +158,16 @@
   border-radius: var(--radius-pill);
 }
 
+/* ── Spielzeit-Gruppen ── */
+.timeGroup {
+  font-size: var(--size-footnote);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: var(--space-3) var(--space-1) var(--space-2);
+}
+
 /* ── Match-Liste ── */
 .list {
   display: flex;

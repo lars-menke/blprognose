@@ -36,7 +36,7 @@
 
   /* ---------- Typografie ---------- */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Geist', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
     'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
   --font-mono:
     ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Roboto Mono',
@@ -132,7 +132,7 @@ html[data-theme='dark'] {
   --bg-tabbar:      rgba(28, 28, 30, 0.94);
   --text-primary:   #FFFFFF;
   --text-secondary: #98989E;
-  --text-tertiary:  #48484A;
+  --text-tertiary:  #6C6C70;
   --system-blue:    #0A84FF;
   --system-green:   #30D158;
   --system-orange:  #FF9F0A;

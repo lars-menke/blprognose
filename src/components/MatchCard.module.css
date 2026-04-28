@@ -11,6 +11,11 @@
   transition: opacity 0.12s ease;
 }
 
+.cardTop {
+  outline: 1.5px solid color-mix(in srgb, var(--system-yellow) 45%, transparent);
+  outline-offset: -1.5px;
+}
+
 .card:active {
   opacity: 0.75;
 }
@@ -158,4 +163,17 @@ html[data-theme='dark'] .badgeTop {
   text-align: center;
   white-space: nowrap;
   line-height: 1.2;
+}
+
+.scoreCorrect { color: var(--system-green); }
+.scoreIncorrect { color: var(--system-red); }
+.scoreLabelCorrect { color: var(--system-green); font-weight: var(--weight-semibold); }
+.scoreLabelIncorrect { color: var(--system-red); font-weight: var(--weight-semibold); }
+
+.tippSmall {
+  font-size: var(--size-caption-2);
+  color: var(--text-tertiary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
 }

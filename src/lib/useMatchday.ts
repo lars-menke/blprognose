@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchSeason, fetchLogos, buildDynST, buildMatchEntries, detectCurrentSpieltag, resolveCode } from './openligadb';
+import { fetchSeason, fetchPrevSeason, fetchLogos, buildDynST, buildMatchEntries, detectCurrentSpieltag, resolveCode } from './openligadb';
 import { fetchOdds } from './fetchOdds';
 import { recalcMatches, calcSingle, type MatchResult, type TeamStats } from './poisson';
 import { buildCalib, type CalibSample, type CalibParams } from './calibration';
@@ -12,6 +12,7 @@ export type MatchdayEntry = {
   away: string;
   kickoff: string;
   result: MatchResult;
+  actual: { g1: number; g2: number } | null;
 };
 
 export type MatchdayState = {
@@ -57,7 +58,7 @@ export function useMatchday(): MatchdayState {
   const results = recalcMatches(rawMatches, stData, FALLBACK_STATS, calib);
 
   const matches: MatchdayEntry[] = rawMatches
-    .map(m => ({ id: m.id, home: m.home, away: m.away, kickoff: m.kickoff, result: results[m.id] }))
+    .map(m => ({ id: m.id, home: m.home, away: m.away, kickoff: m.kickoff, result: results[m.id], actual: m.actual }))
     .filter(m => m.result);
 
   const hasMono = matches.some(m => m.result.adjusted);
@@ -71,7 +72,7 @@ export function useMatchday(): MatchdayState {
 
     async function init() {
       try {
-        const [all, oddsMap] = await Promise.all([fetchSeason(), fetchOdds()]);
+        const [all, prevAll, oddsMap] = await Promise.all([fetchSeason(), fetchPrevSeason(), fetchOdds()]);
         if (cancelled) return;
 
         const current = detectCurrentSpieltag(all);
@@ -81,6 +82,23 @@ export function useMatchday(): MatchdayState {
         const newStMap: Record<number, Record<string, TeamStats>> = {};
         const newMatchesMap: Record<number, MatchEntry[]> = {};
         const calibSamples: CalibSample[] = [];
+
+        // Previous season: collect all matchdays 5+ as calibration baseline
+        if (prevAll.length > 0) {
+          const maxPrev = Math.max(...prevAll.map(m => m.group.groupOrderID));
+          for (let nr = 5; nr <= maxPrev; nr++) {
+            const stData = buildDynST(prevAll, nr);
+            const entries = buildMatchEntries(prevAll, nr);
+            for (const entry of entries) {
+              const act = getActualOutcome(prevAll, nr, entry.home, entry.away);
+              if (!act) continue;
+              const h = stData[entry.home] ?? FALLBACK_STATS[entry.home] ?? DEFAULT_ST;
+              const a = stData[entry.away] ?? FALLBACK_STATS[entry.away] ?? DEFAULT_ST;
+              const raw = calcSingle(h, a, null, null, entry.hForm, entry.aForm);
+              calibSamples.push({ pH: raw.pH, pD: raw.pD, pA: raw.pA, actual: act });
+            }
+          }
+        }
 
         const maxSt = Math.max(...all.map(m => m.group.groupOrderID));
 

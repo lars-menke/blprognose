@@ -4,11 +4,13 @@
 const OLDB = 'https://api.openligadb.de';
 const DC_RHO = -0.13;
 const FORM_WEIGHT = 0.40;
-const DRAW_THRESHOLD = 0.23;
-const DRAW_THRESHOLD_TIGHT = 0.20;
+const DRAW_THRESHOLD = 0.20;
+const DRAW_THRESHOLD_TIGHT = 0.17;
 const LG_DEF_H = 1.21;
 const LG_DEF_A = 1.58;
 const FORM_DECAY = 0.72;
+const DRAW_BOOST_MAX = 0.15;
+const DRAW_BOOST_RANGE = 0.40;
 
 // ── Poisson ──────────────────────────────────────────────────────────────────
 function pois(l, k) { let p=Math.exp(-l); for(let i=1;i<=k;i++) p*=l/i; return p; }
@@ -84,6 +86,20 @@ function calcLambdas(h,a,hF,aF) {
   return {lH:Math.max(0.3,Math.min(4.5,eHGF*(eAGA/LG_DEF_A))),lA:Math.max(0.3,Math.min(4.5,eAGF*(eHGA/LG_DEF_H)))};
 }
 
+// ── Draw Boost ────────────────────────────────────────────────────────────────
+function applyDrawBoost(pH, pD, pA, lambdaDiff) {
+  if (lambdaDiff >= DRAW_BOOST_RANGE) return {pH, pD, pA};
+  const boost = DRAW_BOOST_MAX * (1 - lambdaDiff / DRAW_BOOST_RANGE);
+  const boosted = Math.min(0.55, pD + boost);
+  const actual = boosted - pD;
+  const fromH = actual * pH / (pH + pA);
+  const nH = Math.max(0.05, pH - fromH);
+  const nA = Math.max(0.05, pA - (actual - fromH));
+  const nD = boosted;
+  const tot = nH + nD + nA;
+  return {pH: nH/tot, pD: nD/tot, pA: nA/tot};
+}
+
 // ── Platt-Kalibrierung ────────────────────────────────────────────────────────
 const logit = p => { const c=Math.max(0.001,Math.min(0.999,p)); return Math.log(c/(1-c)); };
 const sigmoid = x => 1/(1+Math.exp(-x));
@@ -118,13 +134,28 @@ function shrinkToMean(pH,pD,pA) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-console.log('Lade Saison-Daten von OpenLigaDB...');
-const r = await fetch(`${OLDB}/getmatchdata/bl1/2025`);
-const all = await r.json();
+console.log('Lade Saison-Daten von OpenLigaDB (2024 + 2025)...');
+const [r24, r25] = await Promise.all([
+  fetch(`${OLDB}/getmatchdata/bl1/2024`),
+  fetch(`${OLDB}/getmatchdata/bl1/2025`),
+]);
+const prev = await r24.json();
+const all = await r25.json();
 const played = all.filter(m=>m.matchIsFinished&&!!goals(m));
-console.log(`${played.length} gespielte Spiele geladen.\n`);
+console.log(`Vorjahr: ${prev.filter(m=>m.matchIsFinished&&!!goals(m)).length} Spiele, Saison 2025: ${played.length} Spiele geladen.\n`);
 
-// Pass 1: Rohwahrscheinlichkeiten fuer alle Spiele berechnen
+// Vorjahr-Pool: alle Spiele ab ST5 als Kalibrierungs-Basis
+const prevPool = [];
+for(const m of prev.filter(m=>m.matchIsFinished&&!!goals(m))){
+  const nr=m.group.groupOrderID; if(nr<5) continue;
+  const h=code(m.team1),a=code(m.team2); if(!h||!a) continue;
+  const g=goals(m), st=buildStats(prev,nr);
+  const {lH,lA}=calcLambdas(st[h]??DEF,st[a]??DEF,buildForm(prev,h,nr,true),buildForm(prev,a,nr,false));
+  const {pH,pD,pA}=poisMatrix(lH,lA);
+  prevPool.push({nr,h,a,lH,lA,pH,pD,pA,act:outcome(g.g1,g.g2)});
+}
+
+// Pass 1: Rohwahrscheinlichkeiten fuer alle 2025-Spiele (ab ST5)
 const rawPool = [];
 const MIN_ST = 5;
 for(const m of played){
@@ -136,16 +167,17 @@ for(const m of played){
   rawPool.push({nr,h,a,lH,lA,sc,pH,pD,pA,act:outcome(g.g1,g.g2),score:`${g.g1}:${g.g2}`});
 }
 
-// Pass 2: Rollierend kalibrieren (nur Daten VOR dem jeweiligen Spieltag)
+// Pass 2: Rollierend kalibrieren (Vorjahr + Daten VOR dem jeweiligen Spieltag)
 const results = [];
 for(const raw of rawPool){
-  const past=rawPool.filter(x=>x.nr<raw.nr);
+  const past=[...prevPool, ...rawPool.filter(x=>x.nr<raw.nr)];
   const calib=buildCalib(past);
-  let {pH,pD,pA}=calib?applyCalib(raw.pH,raw.pD,raw.pA,calib):shrinkToMean(raw.pH,raw.pD,raw.pA);
+  const boosted=applyDrawBoost(raw.pH,raw.pD,raw.pA,Math.abs(raw.lH-raw.lA));
+  let {pH,pD,pA}=calib?applyCalib(boosted.pH,boosted.pD,boosted.pA,calib):shrinkToMean(boosted.pH,boosted.pD,boosted.pA);
 
   const lambdaDiff=Math.abs(raw.lH-raw.lA);
   const base=lambdaDiff<0.25?DRAW_THRESHOLD_TIGHT:DRAW_THRESHOLD;
-  const dt=calib?base*0.78:base;
+  const dt=calib?base*0.55:base;
   let wo=pH>pD&&pH>pA?'H':pA>pD&&pA>pH?'A':'D';
   if(wo==='D'&&pD<dt) wo=pH>=pA?'H':'A';
 

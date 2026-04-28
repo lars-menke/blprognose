@@ -43,6 +43,7 @@ export type MatchEntry = {
   p: MarketProbs | null;
   hForm: FormData;
   aForm: FormData;
+  actual: { g1: number; g2: number } | null;
 };
 
 export function resolveCode(t: { teamName: string; shortName: string }): string | null {
@@ -62,6 +63,7 @@ function fmtKickoff(utcStr?: string): string {
 }
 
 let _seasonCache: OldbMatch[] | null = null;
+let _prevSeasonCache: OldbMatch[] | null = null;
 
 export async function fetchSeason(): Promise<OldbMatch[]> {
   if (_seasonCache) return _seasonCache;
@@ -69,6 +71,17 @@ export async function fetchSeason(): Promise<OldbMatch[]> {
   if (!r.ok) throw new Error(`OpenLigaDB HTTP ${r.status}`);
   _seasonCache = await r.json();
   return _seasonCache!;
+}
+
+export async function fetchPrevSeason(): Promise<OldbMatch[]> {
+  if (_prevSeasonCache) return _prevSeasonCache;
+  try {
+    const prev = String(Number(OLDB_SEASON) - 1);
+    const r = await fetch(`${OLDB_BASE}/getmatchdata/${OLDB_LEAGUE}/${prev}`);
+    if (!r.ok) return [];
+    _prevSeasonCache = await r.json();
+    return _prevSeasonCache!;
+  } catch { return []; }
 }
 
 export function buildDynST(all: OldbMatch[], beforeNr: number): Record<string, TeamStats> {
@@ -175,6 +188,7 @@ export function buildMatchEntries(
         p: oddsMap[`${hC}-${aC}`] ?? null,
         hForm: buildForm(all, hC, nr, true),
         aForm: buildForm(all, aC, nr, false),
+        actual: m.matchIsFinished ? (getFinalGoals(m) ?? null) : null,
       }];
     });
 }

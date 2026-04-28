@@ -87,26 +87,40 @@ export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
         {!loading && !error && matches.length === 0 && (
           <div className={styles.state}>Keine Daten für Spieltag {spieltag}</div>
         )}
-        {!loading && matches.map(m => {
-          const home = CLUBS[m.home];
-          const away = CLUBS[m.away];
-          if (!home || !away) return null;
-          const fp = m.result.fp;
-          const topTip = fp >= 0.70;
-          return (
-            <MatchCard
-              key={m.id}
-              home={home}
-              away={away}
-              kickoff={m.kickoff}
-              result={m.result}
-              homeLogo={logos[m.home]}
-              awayLogo={logos[m.away]}
-              topTip={topTip}
-              onClick={() => setSelectedMatch(m)}
-            />
-          );
-        })}
+        {!loading && (() => {
+          // Group matches by date (portion before " · ")
+          const groups: { key: string; items: typeof matches }[] = [];
+          const seen = new Map<string, typeof matches>();
+          for (const m of matches) {
+            const key = m.kickoff.includes(' · ') ? m.kickoff.split(' · ')[0] : m.kickoff;
+            if (!seen.has(key)) { const arr: typeof matches = []; seen.set(key, arr); groups.push({ key, items: arr }); }
+            seen.get(key)!.push(m);
+          }
+          return groups.map(({ key, items }) => (
+            <div key={key}>
+              {groups.length > 1 && <div className={styles.timeGroup}>{key}</div>}
+              {items.map(m => {
+                const home = CLUBS[m.home];
+                const away = CLUBS[m.away];
+                if (!home || !away) return null;
+                return (
+                  <MatchCard
+                    key={m.id}
+                    home={home}
+                    away={away}
+                    kickoff={m.kickoff}
+                    result={m.result}
+                    homeLogo={logos[m.home]}
+                    awayLogo={logos[m.away]}
+                    topTip={m.result.fp >= 0.70}
+                    actual={m.actual}
+                    onClick={() => setSelectedMatch(m)}
+                  />
+                );
+              })}
+            </div>
+          ));
+        })()}
       </div>
 
       {/* Match Detail Sheet */}

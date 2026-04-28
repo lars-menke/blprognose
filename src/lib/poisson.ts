@@ -4,12 +4,14 @@ import { applyCalib, shrinkToMean } from './calibration';
 
 export const DC_RHO = -0.13;
 export const FORM_WEIGHT = 0.40;
-export const DRAW_THRESHOLD = 0.23;
-export const DRAW_THRESHOLD_TIGHT = 0.20;
+export const DRAW_THRESHOLD = 0.20;
+export const DRAW_THRESHOLD_TIGHT = 0.17;
 export const FAV_MIN_GOALS_LAMBDA = 2.0;
 export const MONO_MAX = 2;
-export const LG_DEF_H = 1.21; // Ø hGA über alle BL1-Teams
-export const LG_DEF_A = 1.58; // Ø aGA über alle BL1-Teams
+export const LG_DEF_H = 1.21; // Ø hGA über alle BL1-Teams (Fallback)
+export const LG_DEF_A = 1.58; // Ø aGA über alle BL1-Teams (Fallback)
+export const DRAW_BOOST_MAX = 0.15;   // max draw boost bei lambdaDiff=0
+export const DRAW_BOOST_RANGE = 0.40; // boost wirkt wenn lambdaDiff < 0.4
 
 export type Outcome = 'H' | 'D' | 'A';
 
@@ -124,25 +126,41 @@ export function calcSingle(
   const { sc, pH: rawPH, pD: rawPD, pA: rawPA } = poisMatrix(lH, lA);
   const srt = Object.entries(sc).sort((x, y) => y[1] - x[1]) as Array<[string, number]>;
 
+  const lambdaDiff = Math.abs(lH - lA);
+
+  // Structural draw boost: Poisson under-predicts draws for close games.
+  // Applied before calibration and only when no market correction is active.
+  let bPH = rawPH, bPD = rawPD, bPA = rawPA;
+  if (!extP && lambdaDiff < DRAW_BOOST_RANGE) {
+    const boost = DRAW_BOOST_MAX * (1 - lambdaDiff / DRAW_BOOST_RANGE);
+    const boosted = Math.min(0.55, rawPD + boost);
+    const actual = boosted - rawPD;
+    const fromH = actual * rawPH / (rawPH + rawPA);
+    bPH = Math.max(0.05, rawPH - fromH);
+    bPA = Math.max(0.05, rawPA - (actual - fromH));
+    bPD = boosted;
+    const tot = bPH + bPD + bPA;
+    bPH /= tot; bPD /= tot; bPA /= tot;
+  }
+
   // Calibration: Platt scaling from past results, or regression-to-mean fallback.
   // Skip when market correction was applied (market already calibrates).
-  let pH = rawPH, pD = rawPD, pA = rawPA;
+  let pH = bPH, pD = bPD, pA = bPA;
   let calibrated = false;
   if (!extP) {
     if (calib) {
-      ({ pH, pD, pA } = applyCalib(rawPH, rawPD, rawPA, calib));
+      ({ pH, pD, pA } = applyCalib(bPH, bPD, bPA, calib));
       calibrated = true;
     } else {
-      ({ pH, pD, pA } = shrinkToMean(rawPH, rawPD, rawPA));
+      ({ pH, pD, pA } = shrinkToMean(bPH, bPD, bPA));
     }
   }
 
-  const lambdaDiff = Math.abs(lH - lA);
   // When calibration compresses pD toward ~22%, lower the threshold accordingly
   const baseThreshold = lambdaDiff < 0.25 ? DRAW_THRESHOLD_TIGHT : DRAW_THRESHOLD;
   const effectiveDrawThreshold = drawThreshold != null
     ? drawThreshold
-    : calibrated ? baseThreshold * 0.78 : baseThreshold;
+    : calibrated ? baseThreshold * 0.55 : baseThreshold;
 
   let wo: Outcome = pH > pD && pH > pA ? 'H' : pA > pD && pA > pH ? 'A' : 'D';
   let drawBlocked = false;
