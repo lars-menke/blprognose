@@ -399,30 +399,168 @@ oder aus Länderspiel-Daten der letzten 12 Monate aufbauen.
 
 ---
 
-## Datenschicht: schedule.ts
+## Datenschicht: Hybrid-Ansatz (statisch + Live-API)
 
-Statt OpenLigaDB (Bundesliga-spezifisch) wird der WM-Spielplan als statische Datei angelegt.
-Die API-Schicht aus `openligadb.ts` entfallt. Stattdessen:
+OpenLigaDB entfallt komplett. Die Datenschicht besteht aus drei Schichten:
+
+| Schicht | Quelle | Aktualisierung |
+|---|---|---|
+| Spielplan (Ansetzungen) | statisches JSON `schedule.ts` | einmalig, vor Turnierbeginn |
+| Ergebnisse (Spielstand) | football-data.org API | Live wahrend Turnier |
+| Marktquoten | The Odds API | 6h-Cache |
+
+---
+
+## schedule.ts (statischer Spielplan)
 
 ```typescript
 // src/lib/schedule.ts
 
 export type WmMatch = {
-  id: string;             // z.B. "GER-SUI-G1"
-  group: string;          // "A" bis "H", oder "R16", "QF", "SF", "3rd", "F"
-  phase: 'group' | 'knockout';
-  home: string;           // 3-letter nation code, z.B. "GER"
+  id: string;             // z.B. "1" (API-ID) oder "GER-SUI-G1"
+  apiId: number;          // football-data.org match ID
+  group: string;          // "A" bis "L" (WM 2026: 12 Gruppen), oder "R32","R16","QF","SF","3RD","F"
+  stage: WmStage;
+  home: string;           // 3-letter FIFA code, z.B. "GER"
   away: string;
   kickoff: string;        // ISO-8601 UTC
-  actual: { g1: number; g2: number } | null;  // null = noch nicht gespielt
 };
 
+export type WmStage =
+  | 'GROUP_STAGE'
+  | 'ROUND_OF_32'
+  | 'ROUND_OF_16'
+  | 'QUARTER_FINALS'
+  | 'SEMI_FINALS'
+  | 'THIRD_PLACE'
+  | 'FINAL';
+
+// WM 2026: 48 Teams, 12 Gruppen (A-L), 104 Spiele
+// Gruppenphase: 11. Juni - 2. Juli 2026
+// K.o.-Runde: 4. Juli - 19. Juli 2026
 export const WM_SCHEDULE: WmMatch[] = [
-  // Gruppenphase
-  { id: 'GER-SUI-G1', group: 'A', phase: 'group', home: 'GER', away: 'SUI',
-    kickoff: '2026-06-12T18:00:00Z', actual: null },
-  // ... alle 48 Gruppenspiele + 16 K.o.-Spiele
+  { id: 'MEX-RSA-G1', apiId: 1, group: 'A', stage: 'GROUP_STAGE',
+    home: 'MEX', away: 'RSA', kickoff: '2026-06-11T20:00:00Z' },
+  // ... alle 104 Spiele (apiId aus football-data.org holen)
 ];
+```
+
+---
+
+## fetchResults.ts (football-data.org API)
+
+Ersetzt `openligadb.ts` vollstandig fur Ergebnisse.
+
+```typescript
+// src/lib/fetchResults.ts
+
+const FD_BASE = 'https://api.football-data.org/v4';
+const FD_KEY = import.meta.env.VITE_FD_API_KEY ?? '';
+const WC_CODE = 'WC';               // competition code fur FIFA World Cup
+const CACHE_KEY = 'wm_results_v1';
+const CACHE_TTL = 3 * 60 * 1000;   // 3 Minuten (Free-Tier: 10 req/min)
+
+// Exaktes Response-Schema der football-data.org v4 API
+type FdMatch = {
+  id: number;
+  utcDate: string;
+  status: 'SCHEDULED' | 'LIVE' | 'IN_PLAY' | 'PAUSED' | 'FINISHED' | 'POSTPONED' | 'CANCELLED';
+  stage: string;             // "GROUP_STAGE", "ROUND_OF_16", "QUARTER_FINALS" etc.
+  group: string | null;      // "GROUP_A" ... "GROUP_L" (nur Gruppenphase)
+  homeTeam: { id: number; name: string; shortName: string; tla: string; crest: string };
+  awayTeam: { id: number; name: string; shortName: string; tla: string; crest: string };
+  score: {
+    winner: 'HOME_TEAM' | 'AWAY_TEAM' | 'DRAW' | null;
+    duration: 'REGULAR' | 'EXTRA_TIME' | 'PENALTY_SHOOTOUT';
+    fullTime:  { home: number | null; away: number | null };
+    halfTime:  { home: number | null; away: number | null };
+    extraTime: { home: number | null; away: number | null };
+    penalties: { home: number | null; away: number | null };
+  };
+};
+
+// Mapping: football-data.org tla -> FIFA-Code in nations.ts
+// Nötig weil die API teils abweichende 3-Letter-Codes verwendet
+const TLA_MAP: Record<string, string> = {
+  GER: 'GER', BRA: 'BRA', FRA: 'FRA', ARG: 'ARG',
+  ENG: 'ENG', ESP: 'ESP', POR: 'POR', NED: 'NED',
+  USA: 'USA', MEX: 'MEX', CAN: 'CAN',
+  // ... alle 48 Nationen
+};
+
+export type MatchResult = {
+  apiId: number;
+  g1: number;
+  g2: number;
+  finished: boolean;
+};
+
+export async function fetchResults(): Promise<Record<number, MatchResult>> {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < CACHE_TTL) return data;
+    }
+  } catch { /* ignore */ }
+
+  if (!FD_KEY) return {};
+
+  try {
+    const r = await fetch(
+      `${FD_BASE}/competitions/${WC_CODE}/matches`,
+      { headers: { 'X-Auth-Token': FD_KEY } }
+    );
+    if (!r.ok) return {};
+
+    const { matches }: { matches: FdMatch[] } = await r.json();
+
+    const data: Record<number, MatchResult> = {};
+    for (const m of matches) {
+      if (m.status !== 'FINISHED') continue;
+      data[m.id] = {
+        apiId: m.id,
+        g1: m.score.fullTime.home ?? 0,
+        g2: m.score.fullTime.away ?? 0,
+        finished: true,
+      };
+    }
+
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+    } catch { /* storage full */ }
+
+    return data;
+  } catch {
+    return {};
+  }
+}
+```
+
+### Authentifizierung
+
+```
+Header: X-Auth-Token: <dein-api-key>
+```
+
+API-Key kostenlos registrieren: https://www.football-data.org/client/register
+
+### Rate-Limits Free-Tier
+
+| Plan | Requests/Minute | Anmerkung |
+|---|---|---|
+| Free (unauthentifiziert) | 100/24h, nur Competitions-Liste | nicht nutzbar |
+| Free (registriert) | 10 req/min | ausreichend fur WM |
+| Standard | 30 req/min | - |
+
+Response-Header zur Überwachung: `X-Requests-Available-Minute`, `X-RequestCounter-Reset`
+HTTP 429 bei Überschreitung.
+
+### Umgebungsvariable (.env)
+
+```
+VITE_FD_API_KEY=dein_key_hier
+VITE_ODDS_API_KEY=dein_key_hier
 ```
 
 ---
@@ -483,38 +621,127 @@ const ODDS_TEAM_MAP: Record<string, string> = {
 
 ## React Hook: useMatches.ts
 
-Analog zu `useMatchday.ts`, vereinfacht da keine dynamische API:
+Zusammenfuhrung aller Datenquellen. Analogie zu `useMatchday.ts`, aber vereinfacht:
+kein dynamisches `buildDynST` (Teamstatistiken sind pre-game statisch).
 
 ```typescript
+// src/lib/useMatches.ts
+
+import { useState, useEffect } from 'react';
+import { WM_SCHEDULE, type WmStage } from './schedule';
+import { fetchResults } from './fetchResults';
+import { fetchOdds } from './fetchOdds';
+import { recalcMatches, type MatchResult } from './poisson';
+import { NATION_STATS } from './nations';
+import { HARDCODED_CALIB } from './calibration';  // vorberechnete WM-Kalibrierung
+
 export type MatchEntry = {
   id: string;
+  apiId: number;
   group: string;
-  phase: 'group' | 'knockout';
+  stage: WmStage;
   home: string;
   away: string;
   kickoff: string;
   result: MatchResult;
   actual: { g1: number; g2: number } | null;
+  finished: boolean;
 };
 
 export type MatchesState = {
   loading: boolean;
   error: string | null;
-  phase: 'group' | 'knockout';
+  stage: 'group' | 'knockout';
   selectedGroup: string;
   matches: MatchEntry[];
   hasMarket: boolean;
-  hasCalib: boolean;
-  setPhase: (p: 'group' | 'knockout') => void;
+  setStage: (s: 'group' | 'knockout') => void;
   setSelectedGroup: (g: string) => void;
 };
+
+export function useMatches(): MatchesState {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stage, setStage] = useState<'group' | 'knockout'>('group');
+  const [selectedGroup, setSelectedGroup] = useState('A');
+  const [resultsMap, setResultsMap] = useState<Record<number, { g1: number; g2: number; finished: boolean }>>({});
+  const [oddsMap, setOddsMap] = useState<Record<string, import('./poisson').MarketProbs>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      try {
+        const [results, odds] = await Promise.all([fetchResults(), fetchOdds()]);
+        if (cancelled) return;
+        setResultsMap(results);
+        setOddsMap(odds);
+        setLoading(false);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Ladefehler');
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Spiele zusammenbauen
+  const matchInputs = WM_SCHEDULE.map(m => ({
+    id: m.id,
+    home: m.home,
+    away: m.away,
+    p: oddsMap[`${m.home}-${m.away}`] ?? null,
+    hForm: null,   // keine Formkurve bei WM (zu wenige Spiele)
+    aForm: null,
+  }));
+
+  const calcResults = recalcMatches(matchInputs, NATION_STATS, {}, HARDCODED_CALIB);
+
+  const matches: MatchEntry[] = WM_SCHEDULE.map(m => {
+    const res = resultsMap[m.apiId];
+    return {
+      id: m.id,
+      apiId: m.apiId,
+      group: m.group,
+      stage: m.stage,
+      home: m.home,
+      away: m.away,
+      kickoff: m.kickoff,
+      result: calcResults[m.id],
+      actual: res ? { g1: res.g1, g2: res.g2 } : null,
+      finished: res?.finished ?? false,
+    };
+  }).filter(m => m.result);
+
+  const hasMarket = matches.some(m => m.result.marketApplied);
+
+  return { loading, error, stage, selectedGroup, matches, hasMarket, setStage, setSelectedGroup };
+}
 ```
 
-Datenfluss:
-1. `WM_SCHEDULE` laden (statisch, kein Fetch)
-2. `fetchOdds()` fur Marktquoten
-3. `recalcMatches()` mit `NATION_STATS` und optionaler Kalibrierung
-4. `setPhase` / `setSelectedGroup` fur Navigation
+### Datenfluss (Reihenfolge)
+
+```
+WM_SCHEDULE (statisch)
+    │
+    ├─► fetchResults()   football-data.org → welche Spiele sind fertig + Endstand
+    ├─► fetchOdds()      The Odds API → Marktquoten fur laufende/nächste Spiele
+    │
+    ▼
+recalcMatches(NATION_STATS, HARDCODED_CALIB)
+    │
+    ▼
+MatchEntry[] (Prognose + ggf. Ergebnis)
+```
+
+### Kein buildDynST / kein buildForm
+
+Im Gegensatz zur Bundesliga gibt es bei der WM keine rollierenden Saisonstatistiken.
+`NATION_STATS` sind fix (historische Länderspieldaten, pre-game berechnet).
+`hForm` / `aForm` = `null` fur alle Spiele (zu wenige WM-Spiele fur sinnvolle Formkurve).
+Draw-Boost und Kalibrierung bleiben aktiv.
 
 ---
 
