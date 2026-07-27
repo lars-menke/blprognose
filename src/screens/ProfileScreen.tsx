@@ -3,6 +3,7 @@ import { useTheme } from '../lib/useTheme';
 import { isBetRadarEnabled, setBetRadarEnabled } from '../lib/settings';
 import { exportLogText, logStats } from '../lib/learnLog';
 import { paperSummary } from '../lib/betRadar';
+import { unmappedTeams } from '../lib/openligadb';
 import styles from './ProfileScreen.module.css';
 
 export function ProfileScreen() {
@@ -11,6 +12,7 @@ export function ProfileScreen() {
   const [exportMsg, setExportMsg] = useState('');
   const paper = paperSummary();
   const learnStats = logStats();
+  const unmapped = unmappedTeams();
 
   function toggleBetRadar() {
     const next = !betRadar;
@@ -155,6 +157,23 @@ export function ProfileScreen() {
           <Row label="Abgerechnet" value={`${paper.settled} (${paper.won} gewonnen)`} />
           <Row label="ROI" value={`${(paper.roi * 100).toFixed(1)}%`} />
         </div>
+      )}
+
+      {unmapped.length > 0 && (
+        <>
+          <div className={styles.sectionLabel}>Diagnose</div>
+          <div className={styles.sectionCard}>
+            <div className={styles.explainRow}>
+              <div className={styles.explainTerm} style={{ color: 'var(--system-red)' }}>
+                {unmapped.length} unbekannte{unmapped.length === 1 ? 'r' : ''} Verein{unmapped.length === 1 ? '' : 'e'}
+              </div>
+              <div className={styles.explainDesc}>
+                {unmapped.join(', ')} — diese Spiele werden nicht angezeigt. Vereins-Maps ergaenzen:
+                TEAM_CODE_MAP (openligadb.ts), CLUBS + FALLBACK_STATS (clubs.ts), ODDS_TEAM_MAP (fetchOdds.ts).
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       <div className={styles.sectionLabel}>Daten &amp; Lernprotokoll</div>

@@ -49,8 +49,29 @@ export type MatchEntry = {
   actual: { g1: number; g2: number } | null;
 };
 
+// Vereine, die die API liefert, die aber in keiner Map stehen (typisch nach
+// Auf-/Abstieg). Ohne Diagnose verschwinden deren Spiele lautlos: resolveCode
+// gibt null zurueck, buildMatchEntries filtert sie weg, der Spieltag zeigt
+// dann z.B. nur 7 statt 9 Partien -- ohne Fehlermeldung. Deshalb einmal pro
+// unbekanntem Namen eine Warnung, und abrufbar fuer die Beta-Diagnose.
+const _unmapped = new Set<string>();
+
 export function resolveCode(t: { teamName: string; shortName: string }): string | null {
-  return TEAM_CODE_MAP[t.teamName] ?? TEAM_CODE_MAP[t.shortName] ?? null;
+  const code = TEAM_CODE_MAP[t.teamName] ?? TEAM_CODE_MAP[t.shortName] ?? null;
+  if (!code && t.teamName && !_unmapped.has(t.teamName)) {
+    _unmapped.add(t.teamName);
+    console.warn(
+      `[BLforecast] Verein nicht in TEAM_CODE_MAP: "${t.teamName}" (shortName: "${t.shortName}"). ` +
+      `Seine Spiele werden NICHT angezeigt. Ergaenze src/lib/openligadb.ts (TEAM_CODE_MAP), ` +
+      `src/lib/clubs.ts (CLUBS + FALLBACK_STATS) und src/lib/fetchOdds.ts (ODDS_TEAM_MAP).`
+    );
+  }
+  return code;
+}
+
+/** Unbekannte Vereinsnamen dieser Session -- fuer die Beta-Diagnose. */
+export function unmappedTeams(): string[] {
+  return [..._unmapped];
 }
 
 function getFinalGoals(m: OldbMatch): { g1: number; g2: number } | null {

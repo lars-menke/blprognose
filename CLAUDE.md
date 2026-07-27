@@ -6,7 +6,12 @@ Leitfaden für die Weiterentwicklung der Bundesliga-Prognose-PWA im Apple-iOS-De
 
 Bundesliga-Prognose-App mit Poisson-basiertem Statistikmodell, Form-Blending, Marktkorrektur und Monte-Carlo-Saisonprognose. Oberfläche im Apple-iOS-Design (iOS 17 Human Interface Guidelines). Ziel ist eine PWA, die sich auf dem iPhone anfühlt wie eine native App.
 
-Aktuelle Version: **2.0.0**
+Aktuelle Version: **2.0.1**
+
+> **Vor dem ersten Lauf mit echten Daten:** `docs/beta-checkliste.md` abarbeiten.
+> Die gesamte Migration entstand ohne Netzwerkzugriff — Punkt 1 der Liste
+> (Vereins-Maps gegen den echten 26/27-Kader) kann alles Weitere unbrauchbar
+> machen und scheitert lautlos.
 
 Das Projekt teilt seine Herkunft mit `wmforecast` (WM-2026-Prognose-App, forkte ursprünglich BLforecasts Poisson-Modell). Nach der WM 2026 wurden die dortigen Lernprotokoll-, Wett-Radar- und Kalibrierungs-Erkenntnisse zurück nach BLforecast portiert (siehe `docs/bl-migration-playbook.md` und `docs/calibration-analysis.md`). BLforecasts eigener Modellkern (Dixon-Coles-Draw-Boost, Monokultur-Schutz, echter Heim-/Auswärtssplit) war dabei bereits weiter entwickelt als wmforecast und wurde beibehalten statt überschrieben.
 
@@ -67,6 +72,7 @@ scripts/
 docs/
 ├── bl-migration-playbook.md     Plan der WM->BL-Rueckmigration (Phasen 0-6)
 ├── calibration-analysis.md      WM-Kalibrierungsanalyse (Startwerte fuer alpha, Dissens-Signal)
+├── beta-checkliste.md           Erster Lauf mit echten Daten: was zu pruefen ist, in welcher Reihenfolge
 └── backups/                     WM-Lernprotokoll-Exporte (Archiv)
 ```
 
