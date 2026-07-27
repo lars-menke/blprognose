@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { fetchSeason, fetchPrevSeason, buildDynST, buildDynSTWithPriors, buildMatchEntries, resolveCode } from './openligadb';
+import { resolveCode } from './openligadb';
 import { recalcMatches } from './poisson';
+import { loadModelChain } from './modelChain';
 import { FALLBACK_STATS, CLUBS } from './clubs';
 import type { SeasonForecast, SeasonRow } from './season';
 
@@ -69,8 +70,8 @@ export function useSeason() {
   useEffect(() => {
     (async () => {
       try {
-        const [all, prevAll] = await Promise.all([fetchSeason(), fetchPrevSeason()]);
-        const prevSeasonStats = prevAll.length > 0 ? buildDynST(prevAll, Infinity) : null;
+        const chain = await loadModelChain();
+        const all = chain.all;
         const maxNr = Math.max(...all.map(m => m.group.groupOrderID));
 
         const table: Record<string, { pts: number; gf: number; ga: number; played: number }> = {};
@@ -90,14 +91,20 @@ export function useSeason() {
           }
         }
 
+        // Restprogramm aus derselben Rechenkette wie der Spieltag-Tab:
+        // Kaltstart-geglaettete Statistik, Marktquoten fuer angesetzte Partien,
+        // Platt-Kalibrierung. Kein Parallelmodell (WM-Lektion).
         const remaining: Array<{ home: string; away: string; pH: number; pD: number; pA: number }> = [];
         for (let nr = 1; nr <= maxNr; nr++) {
-          const unplayed = all.filter(m => m.group.groupOrderID === nr && !m.matchIsFinished);
-          if (!unplayed.length) continue;
-          const entries = buildMatchEntries(all, nr);
-          const stData = buildDynSTWithPriors(all, nr, prevSeasonStats);
-          const calcMap = recalcMatches(entries, stData, FALLBACK_STATS, null);
-          for (const e of entries) {
+          const entries = chain.matchesByMatchday[nr];
+          if (!entries?.length) continue;
+          // Nur noch nicht gespielte Partien simulieren -- beendete stecken
+          // bereits in der Tabelle und wuerden sonst doppelt zaehlen.
+          const open = entries.filter(e => e.actual === null);
+          if (!open.length) continue;
+          const stData = chain.stByMatchday[nr] ?? {};
+          const calcMap = recalcMatches(open, stData, FALLBACK_STATS, chain.calib);
+          for (const e of open) {
             const r = calcMap[e.id];
             if (r) remaining.push({ home: e.home, away: e.away, pH: r.pH, pD: r.pD, pA: r.pA });
           }

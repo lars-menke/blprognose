@@ -121,18 +121,26 @@ function marketCorrectNR(lH0: number, lA0: number, extP: MarketProbs | null, ite
   return { lH, lA, converged: false };
 }
 
-// Hebt pD an, wenn Teams eng beieinander liegen (lambdaDiff < DRAW_BOOST_RANGE)
-// und/oder ein Modell-Markt-Dissens erkannt wurde (extraBoost). Die Differenz
-// wird proportional aus pH und pA entnommen, damit die Rangfolge erhalten bleibt.
+// Hebt pD an. Zwei Quellen, die sich gegenseitig ausschliessen:
+//
+//   structural: Poisson unterschaetzt Remis bei eng eingestuften Paarungen.
+//     Gilt NUR ohne Marktquote -- der Markt preist Remis bereits korrekt ein,
+//     ein Aufschlag darauf wuerde systematisch ueber der Quote landen.
+//   extraBoost: Dissens-Signal. Setzt eine Marktquote voraus (ohne Markt gibt
+//     es keinen Dissens), greift also genau dann, wenn structural aus ist.
+//
+// Die Differenz wird proportional aus pH und pA entnommen, damit die
+// Rangfolge zwischen Heim und Auswaerts erhalten bleibt.
 function applyDrawBoost(
-  rawPH: number, rawPD: number, rawPA: number, lambdaDiff: number, extraBoost = 0,
+  rawPH: number, rawPD: number, rawPA: number, lambdaDiff: number,
+  opts: { structural: boolean; extraBoost?: number } = { structural: true },
 ): { pH: number; pD: number; pA: number } {
-  const structBoost = lambdaDiff < DRAW_BOOST_RANGE
+  const structBoost = opts.structural && lambdaDiff < DRAW_BOOST_RANGE
     ? DRAW_BOOST_MAX * (1 - lambdaDiff / DRAW_BOOST_RANGE)
     : 0;
-  const boost = structBoost + extraBoost;
+  const boost = structBoost + (opts.extraBoost ?? 0);
   if (boost <= 0) return { pH: rawPH, pD: rawPD, pA: rawPA };
-  const boosted = Math.min(0.60, rawPD + boost);
+  const boosted = Math.min(0.55, rawPD + boost);
   const actual = boosted - rawPD;
   const fromH = actual * rawPH / (rawPH + rawPA);
   let pH = Math.max(0.05, rawPH - fromH);
@@ -162,7 +170,7 @@ export function calcSingle(
   // Reine Modellsicht (kein Markt) -- Basis fuer Dissens-Erkennung und die
   // "Modell vs. Markt"-Transparenzanzeige in der Detailkarte.
   const { pH: rawPH0, pD: rawPD0, pA: rawPA0 } = poisMatrix(lH0, lA0);
-  const modelView = applyDrawBoost(rawPH0, rawPD0, rawPA0, Math.abs(lH0 - lA0));
+  const modelView = applyDrawBoost(rawPH0, rawPD0, rawPA0, Math.abs(lH0 - lA0), { structural: true });
   const pH_model = modelView.pH, pD_model = modelView.pD, pA_model = modelView.pA;
 
   // Marktkorrektur: Newton-Raphson findet das Lambda-Paar, das die Marktquoten
@@ -187,10 +195,12 @@ export function calcSingle(
 
   const lambdaDiff = Math.abs(lH - lA);
 
-  // Struktureller Draw-Boost (Poisson unterschaetzt Remis bei engen Spielen),
-  // plus Dissens-Boost wenn Modell und Markt unterschiedliche Seiten favorisieren.
+  // Ohne Markt: struktureller Draw-Boost. Mit Markt: kein struktureller Boost
+  // (der Markt preist Remis bereits ein), nur der Dissens-Aufschlag, falls
+  // Modell und Markt unterschiedliche Seiten favorisieren.
   const { pH: bPH, pD: bPD, pA: bPA } = applyDrawBoost(
-    rawPH, rawPD, rawPA, lambdaDiff, dissens ? DISSENS_DRAW_BOOST_MAX : 0,
+    rawPH, rawPD, rawPA, lambdaDiff,
+    { structural: !extP, extraBoost: dissens ? DISSENS_DRAW_BOOST_MAX : 0 },
   );
 
   // Calibration: Platt scaling from past results, or regression-to-mean fallback.

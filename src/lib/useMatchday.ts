@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
-import { fetchSeason, fetchPrevSeason, fetchLogos, buildDynST, buildDynSTWithPriors, buildMatchEntries, detectCurrentSpieltag, resolveCode } from './openligadb';
-import { fetchOdds, fetchRawOdds, type RawOdds } from './fetchOdds';
-import { recalcMatches, calcSingle, type MatchResult, type TeamStats } from './poisson';
-import { buildCalib, type CalibSample, type CalibParams } from './calibration';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchLogos } from './openligadb';
+import { fetchRawOdds, type RawOdds } from './fetchOdds';
+import { recalcMatches, type MatchResult, type TeamStats } from './poisson';
+import { type CalibParams } from './calibration';
 import { FALLBACK_STATS } from './clubs';
 import { logPreMatch, logPostMatch } from './learnLog';
 import { computeValueBets, updatePaperLog, type ValueBet } from './betRadar';
 import { isBetRadarEnabled } from './settings';
-import type { MatchEntry, OldbMatch } from './openligadb';
+import { loadModelChain } from './modelChain';
+import type { MatchEntry } from './openligadb';
 
 export type MatchdayEntry = {
   id: string;
@@ -33,21 +34,6 @@ export type MatchdayState = {
   setSpielTag: (nr: number) => void;
 };
 
-const DEFAULT_ST: TeamStats = { rank: 9, hGF: 1.3, hGA: 1.4, aGF: 1.1, aGA: 1.5 };
-
-function getActualOutcome(all: OldbMatch[], nr: number, home: string, away: string): 'H' | 'D' | 'A' | null {
-  const m = all.find(m =>
-    m.group.groupOrderID === nr &&
-    m.matchIsFinished &&
-    resolveCode(m.team1) === home &&
-    resolveCode(m.team2) === away
-  );
-  if (!m) return null;
-  const r = m.matchResults?.find(x => x.resultTypeID === 2);
-  if (!r) return null;
-  return r.pointsTeam1 > r.pointsTeam2 ? 'H' : r.pointsTeam1 < r.pointsTeam2 ? 'A' : 'D';
-}
-
 export function useMatchday(): MatchdayState {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,29 +45,34 @@ export function useMatchday(): MatchdayState {
   const [calib, setCalib] = useState<CalibParams | null>(null);
   const [rawOdds, setRawOdds] = useState<Record<string, RawOdds>>({});
 
-  const rawMatches = matchesMap[spieltag] ?? [];
-  const stData = stDataMap[spieltag] ?? {};
-  const results = recalcMatches(rawMatches, stData, FALLBACK_STATS, calib);
-
-  const matches: MatchdayEntry[] = rawMatches
-    .map(m => ({ id: m.id, home: m.home, away: m.away, kickoff: m.kickoff, kickoffISO: m.kickoffISO, result: results[m.id], actual: m.actual }))
-    .filter(m => m.result);
+  // Memoisiert, damit die Effekte unten nicht bei jedem Render feuern --
+  // sonst schreibt jeder Render Lernprotokoll und Paper-Konto neu.
+  const matches: MatchdayEntry[] = useMemo(() => {
+    const rawMatches = matchesMap[spieltag] ?? [];
+    const stData = stDataMap[spieltag] ?? {};
+    const results = recalcMatches(rawMatches, stData, FALLBACK_STATS, calib);
+    return rawMatches
+      .map(m => ({
+        id: m.id, home: m.home, away: m.away,
+        kickoff: m.kickoff, kickoffISO: m.kickoffISO,
+        result: results[m.id], actual: m.actual,
+      }))
+      .filter(m => m.result);
+  }, [matchesMap, stDataMap, spieltag, calib]);
 
   const hasMono = matches.some(m => m.result.adjusted);
   const hasMarket = matches.some(m => m.result.marketApplied);
   const hasCalib = calib !== null;
-  const valueBets = isBetRadarEnabled() ? computeValueBets(matches, rawOdds) : [];
+
+  const valueBets = useMemo(
+    () => (isBetRadarEnabled() ? computeValueBets(matches, rawOdds) : []),
+    [matches, rawOdds],
+  );
 
   const setSpielTag = useCallback((nr: number) => setSpieltagState(nr), []);
 
-  // Wett-Radar: Paper-Trading-Konto abrechnen, sobald Ergebnisse feststehen.
-  useEffect(() => {
-    if (valueBets.length || matches.some(m => m.actual)) updatePaperLog(valueBets, matches);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matches]);
-
-  // Passives Lernprotokoll: bei jedem Anzeigen des Spieltags einen Snapshot
-  // schreiben (falls Marktquote vorhanden) und Endergebnisse nachtragen.
+  // Passives Lernprotokoll: Snapshot schreiben (falls Marktquote vorhanden)
+  // und Endergebnisse nachtragen.
   useEffect(() => {
     for (const m of matches) {
       if (m.result.marketApplied && m.result.market) {
@@ -99,82 +90,32 @@ export function useMatchday(): MatchdayState {
     }
   }, [matches]);
 
+  // Wett-Radar: Paper-Trading-Konto fuehren und abrechnen.
+  useEffect(() => {
+    if (valueBets.length || matches.some(m => m.actual)) updatePaperLog(valueBets, matches);
+  }, [matches, valueBets]);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function init() {
-      try {
-        const [all, prevAll, oddsMap] = await Promise.all([fetchSeason(), fetchPrevSeason(), fetchOdds()]);
+    loadModelChain()
+      .then(chain => {
         if (cancelled) return;
-
-        const current = detectCurrentSpieltag(all);
-        setTrueSpieltag(current);
-        setSpieltagState(current);
-
-        const newStMap: Record<number, Record<string, TeamStats>> = {};
-        const newMatchesMap: Record<number, MatchEntry[]> = {};
-        const calibSamples: CalibSample[] = [];
-
-        // Kaltstart-Prior fuer Spieltag 1-5: volle Vorsaison-Statistik, geglaettet
-        // mit der Live-Statistik der laufenden Saison (buildDynSTWithPriors).
-        const prevSeasonStats = prevAll.length > 0 ? buildDynST(prevAll, Infinity) : null;
-
-        // Previous season: collect all matchdays 5+ as calibration baseline
-        if (prevAll.length > 0) {
-          const maxPrev = Math.max(...prevAll.map(m => m.group.groupOrderID));
-          for (let nr = 5; nr <= maxPrev; nr++) {
-            const stData = buildDynST(prevAll, nr);
-            const entries = buildMatchEntries(prevAll, nr);
-            for (const entry of entries) {
-              const act = getActualOutcome(prevAll, nr, entry.home, entry.away);
-              if (!act) continue;
-              const h = stData[entry.home] ?? FALLBACK_STATS[entry.home] ?? DEFAULT_ST;
-              const a = stData[entry.away] ?? FALLBACK_STATS[entry.away] ?? DEFAULT_ST;
-              const raw = calcSingle(h, a, null, null, entry.hForm, entry.aForm);
-              calibSamples.push({ pH: raw.pH, pD: raw.pD, pA: raw.pA, actual: act });
-            }
-          }
-        }
-
-        const maxSt = Math.max(...all.map(m => m.group.groupOrderID));
-
-        for (let nr = 1; nr <= maxSt; nr++) {
-          const stData = buildDynSTWithPriors(all, nr, prevSeasonStats);
-          const entries = buildMatchEntries(all, nr, nr >= current ? oddsMap : {});
-          if (!entries.length) continue;
-
-          newMatchesMap[nr] = entries;
-          newStMap[nr] = stData;
-
-          // Collect calibration samples from played matchdays (raw model, no calib yet)
-          if (nr >= 5 && nr < current) {
-            for (const entry of entries) {
-              const act = getActualOutcome(all, nr, entry.home, entry.away);
-              if (!act) continue;
-              const h = stData[entry.home] ?? FALLBACK_STATS[entry.home] ?? DEFAULT_ST;
-              const a = stData[entry.away] ?? FALLBACK_STATS[entry.away] ?? DEFAULT_ST;
-              const raw = calcSingle(h, a, null, null, entry.hForm, entry.aForm);
-              calibSamples.push({ pH: raw.pH, pD: raw.pD, pA: raw.pA, actual: act });
-            }
-          }
-        }
-
-        if (cancelled) return;
-        setStDataMap(newStMap);
-        setMatchesMap(newMatchesMap);
-        setCalib(buildCalib(calibSamples));
+        setTrueSpieltag(chain.current);
+        setSpieltagState(chain.current);
+        setStDataMap(chain.stByMatchday);
+        setMatchesMap(chain.matchesByMatchday);
+        setCalib(chain.calib);
         setLoading(false);
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Ladefehler');
-          setLoading(false);
-        }
-      }
-    }
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : 'Ladefehler');
+        setLoading(false);
+      });
 
-    init();
-    fetchLogos().then(l => { if (!cancelled) setLogos(l); });
-    fetchRawOdds().then(o => { if (!cancelled) setRawOdds(o); });
+    fetchLogos().then(l => { if (!cancelled) setLogos(l); }).catch(() => { /* ohne Wappen weiter */ });
+    fetchRawOdds().then(o => { if (!cancelled) setRawOdds(o); }).catch(() => { /* ohne Radar weiter */ });
 
     return () => { cancelled = true; };
   }, []);

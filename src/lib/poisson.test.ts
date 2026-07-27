@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { calcSingle, recalcMatches, MARKET_BLEND, type TeamStats } from './poisson';
+import {
+  calcSingle, recalcMatches, MARKET_BLEND, DISSENS_DRAW_BOOST_MAX, DRAW_BOOST_RANGE,
+  type TeamStats,
+} from './poisson';
 
 const EVEN: TeamStats = { rank: 1, hGF: 1.3, hGA: 1.3, aGF: 1.1, aGA: 1.4 };
 const EVEN_AWAY: TeamStats = { rank: 2, hGF: 1.3, hGA: 1.3, aGF: 1.1, aGA: 1.4 };
@@ -58,14 +61,40 @@ describe('calcSingle — Dissens-Signal (Modell und Markt uneins -> Remis-Boost)
     expect(einig.dissens).toBe(false);
   });
 
-  it('Dissens hebt pD gegenueber dem reinen Marktfall ohne Dissens an', () => {
+  it('Dissens hebt pD messbar an -- bei identischer Marktquote, nur gedreht', () => {
+    // Gleiche Quotenstruktur, einmal mit dem Modell einig (Favorit vorn),
+    // einmal gedreht (Dissens). Der einzige Unterschied im Ergebnis darf
+    // der Dissens-Aufschlag auf pD sein.
+    const einig   = calcSingle(FAV_HOME, DOG_AWAY, { h: 55, d: 25, a: 20 }, null, null, null);
     const dissens = calcSingle(FAV_HOME, DOG_AWAY, { h: 20, d: 25, a: 55 }, null, null, null);
-    const einig = calcSingle(FAV_HOME, DOG_AWAY, { h: 55, d: 20, a: 25 }, null, null, null);
-    expect(dissens.dissens).toBe(true);
     expect(einig.dissens).toBe(false);
-    // Bei gleicher lambdaDiff-Groessenordnung sollte der Dissens-Fall einen
-    // zusaetzlichen strukturellen Boost auf pD erhalten.
-    expect(dissens.pD).toBeGreaterThan(0.05);
+    expect(dissens.dissens).toBe(true);
+    expect(dissens.pD).toBeGreaterThan(einig.pD);
+    // Der Aufschlag liegt in der Groessenordnung von DISSENS_DRAW_BOOST_MAX,
+    // nicht bei einem Vielfachen davon.
+    expect(dissens.pD - einig.pD).toBeLessThan(DISSENS_DRAW_BOOST_MAX * 2);
+  });
+});
+
+describe('Draw-Boost-Regression: struktureller Boost darf den Markt nicht ueberschreiben', () => {
+  // Der Markt preist Remis bereits ein. Ein struktureller Aufschlag obendrauf
+  // wuerde bei jedem engen Spiel mit Quoten systematisch ueber der Marktquote
+  // landen und den Zweck von MARKET_BLEND untergraben.
+  const EVEN_MARKET = { h: 37, d: 26, a: 37 };
+
+  it('bleibt bei ausgeglichenem Spiel nahe an der Marktquote', () => {
+    const r = calcSingle(EVEN, EVEN_AWAY, EVEN_MARKET, null, null, null);
+    expect(r.marketApplied).toBe(true);
+    expect(r.dissens).toBe(false);
+    expect(r.lambdaDiff).toBeLessThan(DRAW_BOOST_RANGE); // Boost-Fenster aktiv
+    // Ohne Guard landete pD hier bei ~40% -- 14 Punkte ueber dem Markt.
+    expect(r.pD).toBeLessThan(0.32);
+  });
+
+  it('boostet ohne Marktquote weiterhin strukturell', () => {
+    const ohneMarkt = calcSingle(EVEN, EVEN_AWAY, null, null, null, null);
+    const mitMarkt  = calcSingle(EVEN, EVEN_AWAY, EVEN_MARKET, null, null, null);
+    expect(ohneMarkt.pD).toBeGreaterThan(mitMarkt.pD);
   });
 });
 

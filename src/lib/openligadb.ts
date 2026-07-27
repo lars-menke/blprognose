@@ -202,8 +202,21 @@ export function buildDynSTWithPriors(
     if (a) played[a] = (played[a] ?? 0) + 1;
   });
 
+  // Liga-Zugehoerigkeit kommt aus dem Spielplan der laufenden Saison, nicht aus
+  // den bereits gespielten Partien. Sonst faellt an Spieltag 1 jeder Aufsteiger
+  // durch (noch kein Live-Eintrag, kein Vorsaison-Eintrag) -- genau dort, wo der
+  // Aufsteiger-Prior gebraucht wird. Absteiger der Vorsaison bleiben aussen vor.
+  const seasonCodes = new Set<string>();
+  all.forEach(m => {
+    const h = resolveCode(m.team1), a = resolveCode(m.team2);
+    if (h) seasonCodes.add(h);
+    if (a) seasonCodes.add(a);
+  });
+
   const out: Record<string, TeamStats> = {};
-  const codes = new Set([...Object.keys(live), ...Object.keys(prevSeasonStats)]);
+  const codes = seasonCodes.size
+    ? seasonCodes
+    : new Set([...Object.keys(live), ...Object.keys(prevSeasonStats)]);
   codes.forEach(code => {
     const liveStat = live[code];
     const prior = prevSeasonStats[code] ?? promotedPrior;

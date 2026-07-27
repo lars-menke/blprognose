@@ -96,11 +96,11 @@ export function ProfileScreen() {
         />
         <ExplainRow
           term="Draw-Boost"
-          desc="Bei knappen Lambda-Differenzen (< 0.40) hebt ein struktureller Boost die Remis-Wahrscheinlichkeit an - Poisson unterschaetzt sonst enge Unentschieden."
+          desc="Bei knappen Lambda-Differenzen (< 0.40) hebt ein struktureller Boost die Remis-Wahrscheinlichkeit an - Poisson unterschaetzt sonst enge Unentschieden. Greift nur ohne Marktquote: liegen Quoten vor, ist das Remis dort bereits eingepreist."
         />
         <ExplainRow
           term="Dissens-Signal"
-          desc="Favorisieren Modell und Markt unterschiedliche Seiten, ist ein Remis ueberproportional wahrscheinlich (WM-Befund: 44% vs. 14%). Ein zusaetzlicher Boost hebt pD in diesem Fall an."
+          desc="Favorisieren Modell und Markt unterschiedliche Seiten, ist ein Remis ueberproportional wahrscheinlich (WM-Befund: 44% vs. 14%). Nur dann greift mit Marktquote ein zusaetzlicher Remis-Aufschlag."
         />
         <ExplainRow
           term="Platt-Kalibrierung"

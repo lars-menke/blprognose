@@ -6,7 +6,12 @@
 
 import type { MarketProbs } from './poisson';
 
-const LOG_KEY = 'bl_learnlog_v1';
+// v2 = Zeitreihen-Format (snapshots[] je Spiel), analog zum WM-Lernlog v2.
+// v1 (flach, ein Snapshot je Spiel) hat es in BLforecast nie in den Umlauf
+// geschafft; die Migration liest einen eventuell vorhandenen v1-Key einmalig
+// ein, damit fruehe Beta-Installationen ihre Historie behalten.
+const LOG_KEY = 'bl_learnlog_v2';
+const LEGACY_KEY = 'bl_learnlog_v1';
 const MAX_SNAPSHOTS_PER_MATCH = 200; // Deckel gegen unbegrenztes Wachstum
 
 export type LearnSnapshot = {
@@ -27,13 +32,24 @@ export type LearnEntry = {
   actual: 'H' | 'D' | 'A' | null;
 };
 
+// In-Memory-Spiegel des Protokolls. getFrozenOdds wird pro Spiel einmal
+// aufgerufen (34 Spieltage x 9 Spiele, plus Vorsaison, plus Saison-Sim) --
+// ohne Cache waere das je ein voller JSON.parse des gesamten Logs, also
+// mehrere hundert Parses und sekundenlange Blockade des Main-Threads,
+// wachsend mit der Protokollgroesse.
+let _cache: LearnEntry[] | null = null;
+
 function loadLog(): LearnEntry[] {
+  if (_cache) return _cache;
   try {
-    return JSON.parse(localStorage.getItem(LOG_KEY) ?? '[]');
-  } catch { return []; }
+    const stored = localStorage.getItem(LOG_KEY) ?? localStorage.getItem(LEGACY_KEY);
+    _cache = stored ? JSON.parse(stored) : [];
+  } catch { _cache = []; }
+  return _cache!;
 }
 
 function saveLog(entries: LearnEntry[]): void {
+  _cache = entries;
   try {
     localStorage.setItem(LOG_KEY, JSON.stringify(entries));
   } catch { /* storage full */ }

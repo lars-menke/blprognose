@@ -47,11 +47,12 @@ src/
 │   ├── openligadb.ts            OpenLigaDB-API (fetchSeason, fetchPrevSeason, buildDynST, buildDynSTWithPriors, buildForm)
 │   ├── footballData.ts          football-data.org Fallback, falls OpenLigaDB ausfaellt
 │   ├── fetchOdds.ts             The Odds API (MarketProbs fuer Modell + RawOdds fuer Wett-Radar)
-│   ├── learnLog.ts              Lernprotokoll v1 (Zeitreihe Modell/Markt-Snapshots), Odds-Freeze bei Anpfiff
+│   ├── learnLog.ts              Lernprotokoll v2 (Zeitreihe Modell/Markt-Snapshots), Odds-Freeze bei Anpfiff
 │   ├── betRadar.ts              Wett-Radar (EV, Kelly) + Paper-Trading-Konto
 │   ├── settings.ts              Wett-Radar an/aus (kein Modell-Modus-Schalter -- ein Modell, keine Parallelwelten)
-│   ├── useMatchday.ts           React Hook: Datenaggregation, Kalibrierung, Lernprotokoll, Wett-Radar, State
-│   ├── useSeason.ts             React Hook: Monte-Carlo-Saisonprognose
+│   ├── modelChain.ts            DIE Rechenkette: Statistik + Markt + Kalibrierung, einmal pro Session, von allen Hooks geteilt
+│   ├── useMatchday.ts           React Hook: Spieltag-Ansicht, Lernprotokoll, Wett-Radar, State
+│   ├── useSeason.ts             React Hook: Monte-Carlo-Saisonprognose (nutzt dieselbe modelChain)
 │   ├── useStandings.ts          React Hook: Tabellenberechnung
 │   ├── useLogos.ts              React Hook: Vereinswappen laden
 │   ├── useTheme.ts              Dark/Light Mode Toggle
@@ -60,6 +61,7 @@ src/
 ├── App.tsx
 └── main.tsx
 scripts/
+├── analyze-learnlog.mjs         Alpha-Sweep + Dissens-Analyse auf dem Lernprotokoll-Export (Werkzeug fuer die Re-Validierung)
 ├── backtest-run.mjs             Node.js Backtest (eigenstaendige Kopie, vor der WM-Migration -- src/lib/backtest.ts ist aktuell)
 └── param-sweep.mjs              Grid Search fuer Modell-Parameter (dito)
 docs/
@@ -91,8 +93,9 @@ Schriftart: **Geist** (Variable, 100–900) mit SF Pro Fallback. Kein weiteres F
 - Poisson + Dixon-Coles (DC_RHO = -0.13), echter Heim-/Auswärtssplit (kein Neutral-Ground)
 - Form-Blending: 60% Saison-Statistik + 40% gewichtete Formkurve (DECAY = 0.72)
 - Kaltstart-Prior (Spieltag 1-5): Vorsaison-Statistik geglättet mit Live-Statistik, Gewicht n/(n+6); Aufsteiger nutzen Liga-Durchschnitt minus Malus
-- Draw-Boost: DRAW_BOOST_MAX = 0.15, DRAW_BOOST_RANGE = 0.40
-- Dissens-Signal: favorisieren Modell und Markt unterschiedliche Seiten, zusätzlicher Remis-Boost (DISSENS_DRAW_BOOST_MAX = 0.08, unkalibrierter WM-Startwert)
+- Draw-Boost: DRAW_BOOST_MAX = 0.15, DRAW_BOOST_RANGE = 0.40 — greift **nur ohne Marktquote**; mit Quote ist das Remis dort schon eingepreist, ein Aufschlag würde systematisch über dem Markt landen
+- Dissens-Signal: favorisieren Modell und Markt unterschiedliche Seiten, zusätzlicher Remis-Aufschlag (DISSENS_DRAW_BOOST_MAX = 0.08, unkalibrierter WM-Startwert). Setzt eine Marktquote voraus, schließt sich also mit dem strukturellen Boost gegenseitig aus
+- Eine Rechenkette: Spieltag-Prognose und Monte-Carlo-Saisonsimulation ziehen beide aus `modelChain.ts` (gleiche Statistik, gleiche Quoten, gleiche Kalibrierung) — kein Parallelmodell
 - Platt-Kalibrierung: rollierend aus der laufenden + vorherigen Saison (kein Data-Leakage), nur ohne Marktquote angewendet
 - Newton-Raphson findet das markt-implizite Lambda, geblendet mit MARKET_BLEND = 0.4 (60% Modell / 40% Markt, WM-Startwert -- nach den ersten 5 BL-Spieltagen re-validieren)
 - Backtest-Genauigkeit (Stand vor der WM-Migration, Saison 2025/26): 54.2% 1X2, 15.8% Remis erkannt, 69.2% TOP-Tipps -- nach den ersten BL-Spieltagen 2026/27 mit dem neuen Modell neu erheben
@@ -122,11 +125,12 @@ Schriftart: **Geist** (Variable, 100–900) mit SF Pro Fallback. Kein weiteres F
 
 Diese Punkte brauchen echten Netzwerkzugriff auf OpenLigaDB/The Odds API zur Validierung und konnten in einer netzwerk-eingeschränkten Umgebung nicht empirisch geprüft werden:
 
-- [ ] MARKET_BLEND (0.4) und DISSENS_DRAW_BOOST_MAX (0.08) sind unkalibrierte WM-Startwerte -- nach Spieltag 5 mit echtem Lernprotokoll (`ProfileScreen` → Lernprotokoll exportieren) neu validieren.
-- [ ] Kalibrierung wird weiterhin live im Browser aus OpenLigaDB-Historie gebaut (`buildCalib` in `useMatchday.ts`), nicht als trainierte Konstante gebacken -- funktioniert, ist aber ein Cold-Start-Risiko in den ersten Spieltagen, wenn `fetchPrevSeason()` leer bleibt (dann greift `shrinkToMean`).
+- [ ] MARKET_BLEND (0.4) und DISSENS_DRAW_BOOST_MAX (0.08) sind unkalibrierte WM-Startwerte -- nach Spieltag 5 neu validieren: `ProfileScreen` → Lernprotokoll exportieren, dann `node scripts/analyze-learnlog.mjs <export.json>`. Achtung: `LOGGED_ALPHA` im Skript muss mit MARKET_BLEND übereinstimmen, sonst ist die Markt-Lambda-Rekonstruktion falsch.
+- [ ] Kalibrierung wird weiterhin live im Browser aus OpenLigaDB-Historie gebaut (`buildCalib` in `modelChain.ts`), nicht als trainierte Konstante gebacken -- funktioniert, ist aber ein Cold-Start-Risiko in den ersten Spieltagen, wenn `fetchPrevSeason()` leer bleibt (dann greift `shrinkToMean`).
 - [ ] `scripts/backtest-run.mjs` / `param-sweep.mjs` sind eigenstaendige JS-Kopien des Modells von vor der Migration (kein Markt-Blend, kein Dissens-Signal, kein Kaltstart-Prior) -- `src/lib/backtest.ts` (`window.__backtest()`) ist die aktuelle, massgebliche Referenz, weil sie denselben Code wie die App nutzt.
 - [ ] `clubs.ts` FALLBACK_STATS spiegeln den letzten bekannten Stand der Saison 2025/26 -- die echte Saison 2026/27 (inkl. Auf-/Absteiger) kommt live aus OpenLigaDB; nur der Offline-Fallback ist potenziell veraltet.
 - [ ] Odds-Freeze bei Anpfiff (`getFrozenOdds` in `learnLog.ts`) ist ungetestet gegen echte In-Play-Quotenbewegungen.
+- [ ] Der Aufsteiger-Malus (`PROMOTED_GF_MALUS` 0.85 / `PROMOTED_GA_MALUS` 1.15 in `openligadb.ts`) ist gesetzt, aber nicht an historischen Aufsteiger-Saisons kalibriert.
 
 ## Nächste Schritte
 
