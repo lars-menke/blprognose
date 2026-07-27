@@ -1,5 +1,17 @@
 // Standalone backtest -- Node 18+
 // Aufruf: node scripts/backtest-run.mjs
+//
+// HINWEIS (v2.0.0): Dieses Skript ist eine eigenstaendige JS-Kopie des
+// Modells vor der WM-Migration (kein MARKET_BLEND-Alpha-Blend, kein
+// Dissens-Signal, kein Kaltstart-Prior aus der Vorsaison). Die aktuelle,
+// mit der App geteilte Implementierung liegt in src/lib/backtest.ts
+// (Aufruf im Browser via window.__backtest()) -- die ist jetzt die
+// massgebliche Abnahme-Referenz aus Phase 3 des Migrations-Playbooks,
+// weil sie exakt denselben Code wie die Live-Vorhersage nutzt (kein
+// Parallelmodell, siehe "Einheitliches Modell" in docs/bl-migration-playbook.md).
+// Dieses Skript bleibt als schneller Kommandozeilen-Check auf den alten
+// Parametern nuetzlich, braucht aber ein eigenes Update, um die neuen
+// Modellteile abzubilden.
 
 const OLDB = 'https://api.openligadb.de';
 const DC_RHO = -0.13;
@@ -134,15 +146,15 @@ function shrinkToMean(pH,pD,pA) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-console.log('Lade Saison-Daten von OpenLigaDB (2024 + 2025)...');
-const [r24, r25] = await Promise.all([
-  fetch(`${OLDB}/getmatchdata/bl1/2024`),
+console.log('Lade Saison-Daten von OpenLigaDB (2025 + 2026)...');
+const [r25, r26] = await Promise.all([
   fetch(`${OLDB}/getmatchdata/bl1/2025`),
+  fetch(`${OLDB}/getmatchdata/bl1/2026`),
 ]);
-const prev = await r24.json();
-const all = await r25.json();
+const prev = await r25.json();
+const all = await r26.json();
 const played = all.filter(m=>m.matchIsFinished&&!!goals(m));
-console.log(`Vorjahr: ${prev.filter(m=>m.matchIsFinished&&!!goals(m)).length} Spiele, Saison 2025: ${played.length} Spiele geladen.\n`);
+console.log(`Vorjahr: ${prev.filter(m=>m.matchIsFinished&&!!goals(m)).length} Spiele, Saison 2026: ${played.length} Spiele geladen.\n`);
 
 // Vorjahr-Pool: alle Spiele ab ST5 als Kalibrierungs-Basis
 const prevPool = [];
@@ -155,7 +167,7 @@ for(const m of prev.filter(m=>m.matchIsFinished&&!!goals(m))){
   prevPool.push({nr,h,a,lH,lA,pH,pD,pA,act:outcome(g.g1,g.g2)});
 }
 
-// Pass 1: Rohwahrscheinlichkeiten fuer alle 2025-Spiele (ab ST5)
+// Pass 1: Rohwahrscheinlichkeiten fuer alle 2026-Spiele (ab ST5)
 const rawPool = [];
 const MIN_ST = 5;
 for(const m of played){

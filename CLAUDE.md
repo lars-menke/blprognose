@@ -4,9 +4,11 @@ Leitfaden für die Weiterentwicklung der Bundesliga-Prognose-PWA im Apple-iOS-De
 
 ## Projekt
 
-Bundesliga-Prognose-App mit Poisson-basiertem Statistikmodell und Form-Blending. Oberfläche im Apple-iOS-Design (iOS 17 Human Interface Guidelines). Ziel ist eine PWA, die sich auf dem iPhone anfühlt wie eine native App.
+Bundesliga-Prognose-App mit Poisson-basiertem Statistikmodell, Form-Blending, Marktkorrektur und Monte-Carlo-Saisonprognose. Oberfläche im Apple-iOS-Design (iOS 17 Human Interface Guidelines). Ziel ist eine PWA, die sich auf dem iPhone anfühlt wie eine native App.
 
-Aktuelle Version: **1.6.0**
+Aktuelle Version: **2.0.0**
+
+Das Projekt teilt seine Herkunft mit `wmforecast` (WM-2026-Prognose-App, forkte ursprünglich BLforecasts Poisson-Modell). Nach der WM 2026 wurden die dortigen Lernprotokoll-, Wett-Radar- und Kalibrierungs-Erkenntnisse zurück nach BLforecast portiert (siehe `docs/bl-migration-playbook.md` und `docs/calibration-analysis.md`). BLforecasts eigener Modellkern (Dixon-Coles-Draw-Boost, Monokultur-Schutz, echter Heim-/Auswärtssplit) war dabei bereits weiter entwickelt als wmforecast und wurde beibehalten statt überschrieben.
 
 ## Stack
 
@@ -14,7 +16,8 @@ Aktuelle Version: **1.6.0**
 - CSS Modules, keine UI-Library, keine Tailwind
 - Schriftart: **Geist** (Variable Font, selbst gehostet in `src/assets/`), SF Pro als Fallback
 - Deployment: GitHub Pages, statisch (`npm run deploy`)
-- Daten: OpenLigaDB-API (Spieltage, Ergebnisse, Logos), The Odds API (Marktquoten)
+- Daten: OpenLigaDB-API (Spieltage, Ergebnisse, Logos), Fallback football-data.org, The Odds API (Marktquoten)
+- Tests: Vitest (`npm test`)
 - Font-Package: `geist` (npm)
 
 ## Dateistruktur
@@ -28,32 +31,41 @@ src/
 │   └── globals.css              Reset, Body-Styles, @font-face Geist
 ├── components/
 │   ├── MatchCard.tsx            Spielkarte (Tipp, Kategorie, Ergebnis)
-│   ├── MatchCard.module.css
-│   ├── MatchDetailSheet.tsx     Bottom-Sheet mit Modell-Details (swipe to close)
-│   ├── MatchDetailSheet.module.css
+│   ├── MatchDetailSheet.tsx     Bottom-Sheet mit Modell-Details, Modell-vs-Markt (swipe to close)
 │   ├── ProbabilityBar.tsx       1X2-Balken (6px, grün/grau/orange)
-│   ├── ProbabilityBar.module.css
 │   ├── SplashScreen.tsx         Animierter Ladescreen
-│   ├── SplashScreen.module.css
-│   ├── TeamLogo.tsx             Vereinswappen mit Fallback-Initialen
-│   └── TeamLogo.module.css
+│   ├── TabBar.tsx               Tab-Navigation (Spieltag / Tabelle / Saison / Modell)
+│   └── TeamLogo.tsx             Vereinswappen mit Fallback-Initialen
 ├── screens/
-│   ├── MatchdayScreen.tsx       Hauptscreen: Spieltag-Liste mit Gruppen nach Datum
-│   └── MatchdayScreen.module.css
+│   ├── MatchdayScreen.tsx       Spieltag-Liste nach Datum gruppiert, Wett-Radar-Panel
+│   ├── TableScreen.tsx          Tabelle mit CL/EL/Conference/Abstiegs-Badges
+│   ├── SeasonScreen.tsx         Saisonprognose (Monte-Carlo, 5000 Simulationen)
+│   └── ProfileScreen.tsx        "Modell"-Tab: Einstellungen (Cluster-Gliederung), Modell-Erklärung, Lernprotokoll-Export
 ├── lib/
-│   ├── poisson.ts               Poisson-Modell + Dixon-Coles + Draw-Boost
+│   ├── poisson.ts               Poisson + Dixon-Coles + Draw-Boost + Dissens-Signal + Markt-Blend (MARKET_BLEND)
 │   ├── calibration.ts           Platt-Scaling (buildCalib, applyCalib, shrinkToMean)
-│   ├── openligadb.ts            OpenLigaDB-API (fetchSeason, fetchPrevSeason, buildDynST, buildForm)
-│   ├── fetchOdds.ts             The Odds API (Marktquoten als MarketProbs)
-│   ├── useMatchday.ts           React Hook: Datenaggregation, Kalibrierung, State
+│   ├── openligadb.ts            OpenLigaDB-API (fetchSeason, fetchPrevSeason, buildDynST, buildDynSTWithPriors, buildForm)
+│   ├── footballData.ts          football-data.org Fallback, falls OpenLigaDB ausfaellt
+│   ├── fetchOdds.ts             The Odds API (MarketProbs fuer Modell + RawOdds fuer Wett-Radar)
+│   ├── learnLog.ts              Lernprotokoll v1 (Zeitreihe Modell/Markt-Snapshots), Odds-Freeze bei Anpfiff
+│   ├── betRadar.ts              Wett-Radar (EV, Kelly) + Paper-Trading-Konto
+│   ├── settings.ts              Wett-Radar an/aus (kein Modell-Modus-Schalter -- ein Modell, keine Parallelwelten)
+│   ├── useMatchday.ts           React Hook: Datenaggregation, Kalibrierung, Lernprotokoll, Wett-Radar, State
+│   ├── useSeason.ts             React Hook: Monte-Carlo-Saisonprognose
+│   ├── useStandings.ts          React Hook: Tabellenberechnung
+│   ├── useLogos.ts              React Hook: Vereinswappen laden
 │   ├── useTheme.ts              Dark/Light Mode Toggle
-│   ├── clubs.ts                 CLUBS-Map (name, kurz, farbe) + FALLBACK_STATS
-│   └── backtest.ts              Browser-Backtest (window.__backtest)
+│   ├── clubs.ts                 CLUBS-Map (name, kurz, farbe) + FALLBACK_STATS (18 Vereine)
+│   └── backtest.ts              Browser-Backtest (window.__backtest), massgebliche Abnahme-Referenz
 ├── App.tsx
 └── main.tsx
 scripts/
-├── backtest-run.mjs             Node.js Backtest (2024+2025, rolling calibration)
-└── param-sweep.mjs              Grid Search für optimale Modell-Parameter
+├── backtest-run.mjs             Node.js Backtest (eigenstaendige Kopie, vor der WM-Migration -- src/lib/backtest.ts ist aktuell)
+└── param-sweep.mjs              Grid Search fuer Modell-Parameter (dito)
+docs/
+├── bl-migration-playbook.md     Plan der WM->BL-Rueckmigration (Phasen 0-6)
+├── calibration-analysis.md      WM-Kalibrierungsanalyse (Startwerte fuer alpha, Dissens-Signal)
+└── backups/                     WM-Lernprotokoll-Exporte (Archiv)
 ```
 
 ## Designsprache
@@ -76,12 +88,14 @@ Schriftart: **Geist** (Variable, 100–900) mit SF Pro Fallback. Kein weiteres F
 
 ## Modell (Kurzreferenz)
 
-- Poisson + Dixon-Coles (DC_RHO = -0.13)
+- Poisson + Dixon-Coles (DC_RHO = -0.13), echter Heim-/Auswärtssplit (kein Neutral-Ground)
 - Form-Blending: 60% Saison-Statistik + 40% gewichtete Formkurve (DECAY = 0.72)
+- Kaltstart-Prior (Spieltag 1-5): Vorsaison-Statistik geglättet mit Live-Statistik, Gewicht n/(n+6); Aufsteiger nutzen Liga-Durchschnitt minus Malus
 - Draw-Boost: DRAW_BOOST_MAX = 0.15, DRAW_BOOST_RANGE = 0.40
-- Platt-Kalibrierung: aus 2024 + 2025 Saison (rolling, kein Data-Leakage)
-- Newton-Raphson Marktkorrektur auf Buchmacher-Quoten
-- Backtest-Genauigkeit: 54.2% 1X2, 15.8% Remis erkannt, 69.2% TOP-Tipps
+- Dissens-Signal: favorisieren Modell und Markt unterschiedliche Seiten, zusätzlicher Remis-Boost (DISSENS_DRAW_BOOST_MAX = 0.08, unkalibrierter WM-Startwert)
+- Platt-Kalibrierung: rollierend aus der laufenden + vorherigen Saison (kein Data-Leakage), nur ohne Marktquote angewendet
+- Newton-Raphson findet das markt-implizite Lambda, geblendet mit MARKET_BLEND = 0.4 (60% Modell / 40% Markt, WM-Startwert -- nach den ersten 5 BL-Spieltagen re-validieren)
+- Backtest-Genauigkeit (Stand vor der WM-Migration, Saison 2025/26): 54.2% 1X2, 15.8% Remis erkannt, 69.2% TOP-Tipps -- nach den ersten BL-Spieltagen 2026/27 mit dem neuen Modell neu erheben
 
 ## Muster-Workflow für Claude Code
 
@@ -89,8 +103,9 @@ Schriftart: **Geist** (Variable, 100–900) mit SF Pro Fallback. Kein weiteres F
 2. Lies `MatchCard.tsx` als Referenz-Komponente (Struktur, CSS-Module, Tokens).
 3. Neue Komponente nach demselben Schema bauen.
 4. TypeScript-Check: `npx tsc --noEmit`
-5. Build + Deploy: `npm run build && npm run deploy`
-6. Version in `package.json` bumpen (Minor bei Features, Patch bei Fixes).
+5. Tests: `npm test`
+6. Build + Deploy: `npm run build && npm run deploy`
+7. Version in `package.json` bumpen (Minor bei Features, Patch bei Fixes).
 
 ## Nicht machen
 
@@ -101,12 +116,25 @@ Schriftart: **Geist** (Variable, 100–900) mit SF Pro Fallback. Kein weiteres F
 - Keine Schatten oder Verläufe (ausser Blur im Sheet-Overlay).
 - Keine em-Dashes im UI-Text oder in Commit-Messages.
 - Kein separates Deployment pro Feature — Änderungen bündeln.
+- Kein Parallelmodell (z.B. Elo-Beimischung) ohne empirischen Nachweis -- WM-Lektion, siehe `docs/calibration-analysis.md`.
+
+## Bekannte Lücken (Stand v2.0.0, WM-Rückmigration)
+
+Diese Punkte brauchen echten Netzwerkzugriff auf OpenLigaDB/The Odds API zur Validierung und konnten in einer netzwerk-eingeschränkten Umgebung nicht empirisch geprüft werden:
+
+- [ ] MARKET_BLEND (0.4) und DISSENS_DRAW_BOOST_MAX (0.08) sind unkalibrierte WM-Startwerte -- nach Spieltag 5 mit echtem Lernprotokoll (`ProfileScreen` → Lernprotokoll exportieren) neu validieren.
+- [ ] Kalibrierung wird weiterhin live im Browser aus OpenLigaDB-Historie gebaut (`buildCalib` in `useMatchday.ts`), nicht als trainierte Konstante gebacken -- funktioniert, ist aber ein Cold-Start-Risiko in den ersten Spieltagen, wenn `fetchPrevSeason()` leer bleibt (dann greift `shrinkToMean`).
+- [ ] `scripts/backtest-run.mjs` / `param-sweep.mjs` sind eigenstaendige JS-Kopien des Modells von vor der Migration (kein Markt-Blend, kein Dissens-Signal, kein Kaltstart-Prior) -- `src/lib/backtest.ts` (`window.__backtest()`) ist die aktuelle, massgebliche Referenz, weil sie denselben Code wie die App nutzt.
+- [ ] `clubs.ts` FALLBACK_STATS spiegeln den letzten bekannten Stand der Saison 2025/26 -- die echte Saison 2026/27 (inkl. Auf-/Absteiger) kommt live aus OpenLigaDB; nur der Offline-Fallback ist potenziell veraltet.
+- [ ] Odds-Freeze bei Anpfiff (`getFrozenOdds` in `learnLog.ts`) ist ungetestet gegen echte In-Play-Quotenbewegungen.
 
 ## Nächste Schritte
 
-- [ ] Bundesliga-Tabelle (eigener Tab, aus Saison-Daten ableitbar)
+- [x] Bundesliga-Tabelle (eigener Tab)
+- [x] Saisonprognose per Monte-Carlo-Simulation
+- [x] Tab-Bar Navigation (Spieltag / Tabelle / Saison / Modell)
+- [x] Lernprotokoll, Wett-Radar, Modell-vs-Markt-Vergleich (WM-Rückmigration)
 - [ ] Favoriten-Filter mit LocalStorage
-- [ ] Saisonprognose per Monte-Carlo-Simulation (10 000 Saisons)
-- [ ] Tab-Bar Navigation (Spieltag / Tabelle / Saison)
 - [ ] PWA Service Worker (Offline-Support, Cache-Strategie)
 - [ ] Push-Notifications zu Spielbeginn (siehe BL Ticker für Pattern)
+- [ ] Beta ~Mitte August 2026 (Supercup/Pokalrunde als Testlauf), danach Lernprotokoll ab Spieltag 1 scharf; Kalibrier-Analyse nach Spieltag 5 und in der Winterpause

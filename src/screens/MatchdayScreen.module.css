@@ -162,6 +162,47 @@
   border-radius: var(--radius-pill);
 }
 
+/* ── Wett-Radar ── */
+.betRadar {
+  margin: var(--space-2) var(--space-5) 0;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  padding: var(--space-3) var(--space-4);
+}
+
+.betRadarLabel {
+  font-size: var(--size-caption-1);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: var(--space-2);
+}
+
+.betRadarRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: var(--size-subhead);
+}
+
+.betRadarMatch {
+  color: var(--text-primary);
+}
+
+.betRadarEv {
+  color: var(--system-orange);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.betRadarHint {
+  font-size: var(--size-caption-2);
+  color: var(--text-tertiary);
+  margin-top: var(--space-2);
+}
+
 /* ── Spielzeit-Gruppen ── */
 .timeGroup {
   font-size: var(--size-footnote);

@@ -37,7 +37,7 @@ export function SplashScreen({ onDone }: Props) {
       </div>
 
       <div className={`${styles.sub} ${visible ? styles.subVisible : ''}`}>
-        Bundesliga 2025/26
+        Bundesliga 2026/27
       </div>
 
       <div className={`${styles.bar} ${phase === 'hold' || phase === 'out' ? styles.barActive : ''}`}>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchSeason, buildDynST, buildMatchEntries, resolveCode } from './openligadb';
+import { fetchSeason, fetchPrevSeason, buildDynST, buildDynSTWithPriors, buildMatchEntries, resolveCode } from './openligadb';
 import { recalcMatches } from './poisson';
 import { FALLBACK_STATS, CLUBS } from './clubs';
 import type { SeasonForecast, SeasonRow } from './season';
@@ -69,7 +69,8 @@ export function useSeason() {
   useEffect(() => {
     (async () => {
       try {
-        const all = await fetchSeason();
+        const [all, prevAll] = await Promise.all([fetchSeason(), fetchPrevSeason()]);
+        const prevSeasonStats = prevAll.length > 0 ? buildDynST(prevAll, Infinity) : null;
         const maxNr = Math.max(...all.map(m => m.group.groupOrderID));
 
         const table: Record<string, { pts: number; gf: number; ga: number; played: number }> = {};
@@ -94,7 +95,7 @@ export function useSeason() {
           const unplayed = all.filter(m => m.group.groupOrderID === nr && !m.matchIsFinished);
           if (!unplayed.length) continue;
           const entries = buildMatchEntries(all, nr);
-          const stData = buildDynST(all, nr);
+          const stData = buildDynSTWithPriors(all, nr, prevSeasonStats);
           const calcMap = recalcMatches(entries, stData, FALLBACK_STATS, null);
           for (const e of entries) {
             const r = calcMap[e.id];

@@ -1,15 +1,17 @@
 import type { TeamStats, FormData, MarketProbs } from './poisson';
+import { fetchFootballDataSeason } from './footballData';
+import { getFrozenOdds } from './learnLog';
 
 export const OLDB_BASE = 'https://api.openligadb.de';
 export const OLDB_LEAGUE = 'bl1';
-export const OLDB_SEASON = '2025';
+export const OLDB_SEASON = '2026';
 
 export const TEAM_CODE_MAP: Record<string, string> = {
-  'FC Bayern München': 'FCB', 'Bayern München': 'FCB',
+  'FC Bayern München': 'FCB', 'Bayern München': 'FCB', 'FC Bayern Munich': 'FCB',
   'Borussia Dortmund': 'BVB',
   'TSG 1899 Hoffenheim': 'TSG', 'TSG Hoffenheim': 'TSG',
   'VfB Stuttgart': 'VFB',
-  'RB Leipzig': 'RBL',
+  'RB Leipzig': 'RBL', 'RasenBallsport Leipzig': 'RBL',
   'Bayer 04 Leverkusen': 'B04', 'Bayer Leverkusen': 'B04',
   'SC Freiburg': 'SCF',
   'Eintracht Frankfurt': 'SGE',
@@ -18,9 +20,9 @@ export const TEAM_CODE_MAP: Record<string, string> = {
   'Hamburger SV': 'HSV',
   '1. FC Köln': 'KOE', 'FC Köln': 'KOE',
   '1. FSV Mainz 05': 'MAI', 'FSV Mainz 05': 'MAI', 'Mainz 05': 'MAI', 'Mainz': 'MAI',
-  'Borussia Mönchengladbach': 'BMG',
+  'Borussia Mönchengladbach': 'BMG', 'Borussia M\'gladbach': 'BMG',
   'VfL Wolfsburg': 'WOB',
-  'FC St. Pauli': 'STP',
+  'FC St. Pauli': 'STP', 'FC St. Pauli 1910': 'STP',
   'SV Werder Bremen': 'SVW', 'Werder Bremen': 'SVW',
   '1. FC Heidenheim 1846': 'HEI', '1. FC Heidenheim': 'HEI',
 };
@@ -40,6 +42,7 @@ export type MatchEntry = {
   home: string;
   away: string;
   kickoff: string;
+  kickoffISO: string;
   p: MarketProbs | null;
   hForm: FormData;
   aForm: FormData;
@@ -65,23 +68,41 @@ function fmtKickoff(utcStr?: string): string {
 let _seasonCache: OldbMatch[] | null = null;
 let _prevSeasonCache: OldbMatch[] | null = null;
 
+// OpenLigaDB ist die bewaehrte Primaerquelle. Liefert sie nichts Brauchbares
+// (Ausfall, leere Antwort vor Saisonstart), springt football-data.org (BL1)
+// als Fallback ein. Beide werden auf dasselbe OldbMatch-Schema gemappt, damit
+// der Rest der App (buildDynST, buildForm, buildMatchEntries) unveraendert bleibt.
 export async function fetchSeason(): Promise<OldbMatch[]> {
   if (_seasonCache) return _seasonCache;
-  const r = await fetch(`${OLDB_BASE}/getmatchdata/${OLDB_LEAGUE}/${OLDB_SEASON}`);
-  if (!r.ok) throw new Error(`OpenLigaDB HTTP ${r.status}`);
-  _seasonCache = await r.json();
-  return _seasonCache!;
+  try {
+    const r = await fetch(`${OLDB_BASE}/getmatchdata/${OLDB_LEAGUE}/${OLDB_SEASON}`);
+    if (!r.ok) throw new Error(`OpenLigaDB HTTP ${r.status}`);
+    const data: OldbMatch[] = await r.json();
+    if (!data.length) throw new Error('OpenLigaDB: leere Saison');
+    _seasonCache = data;
+    return _seasonCache;
+  } catch (e) {
+    const fallback = await fetchFootballDataSeason(Number(OLDB_SEASON));
+    if (fallback.length) { _seasonCache = fallback; return fallback; }
+    throw e instanceof Error ? e : new Error('Ladefehler');
+  }
 }
 
 export async function fetchPrevSeason(): Promise<OldbMatch[]> {
   if (_prevSeasonCache) return _prevSeasonCache;
+  const prev = String(Number(OLDB_SEASON) - 1);
   try {
-    const prev = String(Number(OLDB_SEASON) - 1);
     const r = await fetch(`${OLDB_BASE}/getmatchdata/${OLDB_LEAGUE}/${prev}`);
-    if (!r.ok) return [];
-    _prevSeasonCache = await r.json();
-    return _prevSeasonCache!;
-  } catch { return []; }
+    if (!r.ok) throw new Error(`OpenLigaDB HTTP ${r.status}`);
+    const data: OldbMatch[] = await r.json();
+    if (!data.length) throw new Error('OpenLigaDB: leere Vorsaison');
+    _prevSeasonCache = data;
+    return _prevSeasonCache;
+  } catch {
+    const fallback = await fetchFootballDataSeason(Number(prev));
+    _prevSeasonCache = fallback;
+    return fallback;
+  }
 }
 
 export function buildDynST(all: OldbMatch[], beforeNr: number): Record<string, TeamStats> {
@@ -127,6 +148,74 @@ export function buildDynST(all: OldbMatch[], beforeNr: number): Record<string, T
       hGA: s.hN > 0 ? +(s.hGA / s.hN).toFixed(2) : 1.4,
       aGF: s.aN > 0 ? +(s.aGF / s.aN).toFixed(2) : 1.1,
       aGA: s.aN > 0 ? +(s.aGA / s.aN).toFixed(2) : 1.5,
+    };
+  });
+  return out;
+}
+
+// Aufsteiger-Malus fuer Teams ohne Vorsaisondaten in der aktuellen Liga:
+// schwaecher im Angriff, schwaecher in der Abwehr als der Liga-Durchschnitt.
+const PROMOTED_GF_MALUS = 0.85;
+const PROMOTED_GA_MALUS = 1.15;
+
+function leagueAverage(stats: Record<string, TeamStats>): Omit<TeamStats, 'rank'> {
+  const teams = Object.values(stats);
+  if (!teams.length) return { hGF: 1.3, hGA: 1.4, aGF: 1.1, aGA: 1.5 };
+  const sum = teams.reduce((s, t) => ({
+    hGF: s.hGF + t.hGF, hGA: s.hGA + t.hGA, aGF: s.aGF + t.aGF, aGA: s.aGA + t.aGA,
+  }), { hGF: 0, hGA: 0, aGF: 0, aGA: 0 });
+  const n = teams.length;
+  return { hGF: sum.hGF / n, hGA: sum.hGA / n, aGF: sum.aGF / n, aGA: sum.aGA / n };
+}
+
+/**
+ * Wie buildDynST, blendet die noch duenne Live-Statistik aber glatt mit einem
+ * Prior aus der Vorsaison (oder Liga-Durchschnitt minus Aufsteiger-Malus, wenn
+ * das Team letzte Saison nicht in der Liga war). Gewicht w = n_live / (n_live + 6):
+ * bei 0 gespielten Partien zaehlt nur der Prior, ab ~6 Spielen ueberwiegt die
+ * Live-Statistik zunehmend. Deckt Spieltag 1-5 (Kaltstart) und faedt danach
+ * von selbst aus, ohne Sonderfall im Aufrufer.
+ */
+export function buildDynSTWithPriors(
+  all: OldbMatch[],
+  beforeNr: number,
+  prevSeasonStats: Record<string, TeamStats> | null,
+): Record<string, TeamStats> {
+  const live = buildDynST(all, beforeNr);
+  if (!prevSeasonStats || !Object.keys(prevSeasonStats).length) return live;
+
+  const leagueAvg = leagueAverage(prevSeasonStats);
+  const promotedPrior: TeamStats = {
+    rank: 16,
+    hGF: +(leagueAvg.hGF * PROMOTED_GF_MALUS).toFixed(2),
+    hGA: +(leagueAvg.hGA * PROMOTED_GA_MALUS).toFixed(2),
+    aGF: +(leagueAvg.aGF * PROMOTED_GF_MALUS).toFixed(2),
+    aGA: +(leagueAvg.aGA * PROMOTED_GA_MALUS).toFixed(2),
+  };
+
+  const played: Record<string, number> = {};
+  all.forEach(m => {
+    if (m.group.groupOrderID >= beforeNr) return;
+    if (!getFinalGoals(m)) return;
+    const h = resolveCode(m.team1), a = resolveCode(m.team2);
+    if (h) played[h] = (played[h] ?? 0) + 1;
+    if (a) played[a] = (played[a] ?? 0) + 1;
+  });
+
+  const out: Record<string, TeamStats> = {};
+  const codes = new Set([...Object.keys(live), ...Object.keys(prevSeasonStats)]);
+  codes.forEach(code => {
+    const liveStat = live[code];
+    const prior = prevSeasonStats[code] ?? promotedPrior;
+    if (!liveStat) { out[code] = prior; return; }
+    const n = played[code] ?? 0;
+    const w = n / (n + 6);
+    out[code] = {
+      rank: liveStat.rank,
+      hGF: +((1 - w) * prior.hGF + w * liveStat.hGF).toFixed(2),
+      hGA: +((1 - w) * prior.hGA + w * liveStat.hGA).toFixed(2),
+      aGF: +((1 - w) * prior.aGF + w * liveStat.aGF).toFixed(2),
+      aGA: +((1 - w) * prior.aGA + w * liveStat.aGA).toFixed(2),
     };
   });
   return out;
@@ -180,12 +269,15 @@ export function buildMatchEntries(
     .flatMap(m => {
       const hC = resolveCode(m.team1), aC = resolveCode(m.team2);
       if (!hC || !aC) return [];
+      const id = `${hC.toLowerCase()}-${aC.toLowerCase()}-${nr}`;
+      const kickoffISO = m.matchDateTimeUTC ?? m.matchDateTime ?? '';
       return [{
-        id: `${hC.toLowerCase()}-${aC.toLowerCase()}-${nr}`,
+        id,
         home: hC,
         away: aC,
         kickoff: fmtKickoff(m.matchDateTimeUTC ?? m.matchDateTime),
-        p: oddsMap[`${hC}-${aC}`] ?? null,
+        kickoffISO,
+        p: getFrozenOdds(id, kickoffISO, oddsMap[`${hC}-${aC}`] ?? null),
         hForm: buildForm(all, hC, nr, true),
         aForm: buildForm(all, aC, nr, false),
         actual: m.matchIsFinished ? (getFinalGoals(m) ?? null) : null,

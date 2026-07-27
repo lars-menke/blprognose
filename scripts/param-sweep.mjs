@@ -1,5 +1,10 @@
 // Parameter-Sweep (optimiert: Kalibrierungen werden vorab gecacht)
 // Aufruf: node scripts/param-sweep.mjs
+//
+// HINWEIS (v2.0.0): wie backtest-run.mjs eine eigenstaendige Kopie des
+// Modells vor der WM-Migration (kein MARKET_BLEND, kein Dissens-Signal,
+// kein Kaltstart-Prior). src/lib/backtest.ts teilt sich den Code mit der
+// Live-App und ist die massgebliche Referenz -- siehe Hinweis dort.
 
 const OLDB = 'https://api.openligadb.de';
 const DC_RHO = -0.13;
@@ -104,8 +109,8 @@ function shrinkToMean(pH, pD, pA) {
 
 // ── Daten laden ───────────────────────────────────────────────────────────────
 process.stdout.write('Lade Daten...');
-const [r24, r25] = await Promise.all([fetch(`${OLDB}/getmatchdata/bl1/2024`), fetch(`${OLDB}/getmatchdata/bl1/2025`)]);
-const prev = await r24.json(), all = await r25.json();
+const [r25, r26] = await Promise.all([fetch(`${OLDB}/getmatchdata/bl1/2025`), fetch(`${OLDB}/getmatchdata/bl1/2026`)]);
+const prev = await r25.json(), all = await r26.json();
 console.log(' fertig.');
 
 const prevPool = [];

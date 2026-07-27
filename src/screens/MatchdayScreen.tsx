@@ -12,7 +12,7 @@ type Props = {
 };
 
 export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
-  const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, hasMarket, hasCalib, setSpielTag } = useMatchday();
+  const { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, hasMarket, hasCalib, valueBets, setSpielTag } = useMatchday();
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<MatchdayEntry | null>(null);
 
@@ -37,7 +37,7 @@ export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
           <div>
             <h1 className={styles.large}>BLforecast</h1>
             <p className={styles.subtitle}>
-              {loading ? 'Lade…' : `${spieltag}. Spieltag · Bundesliga 2025/26`}
+              {loading ? 'Lade…' : `${spieltag}. Spieltag · Bundesliga 2026/27`}
             </p>
           </div>
         </div>
@@ -68,6 +68,22 @@ export function MatchdayScreen({ onThemeToggle, isDark }: Props) {
           {hasMarket && <span className={styles.chipMarket}>📊 Marktquoten aktiv</span>}
           {hasCalib && <span className={styles.chipCalib}>🎯 Kalibriert</span>}
           {hasMono && <span className={styles.chipMono}>🔀 Monokultur-Schutz aktiv</span>}
+        </div>
+      )}
+
+      {/* Wett-Radar */}
+      {!loading && !error && valueBets.length > 0 && (
+        <div className={styles.betRadar}>
+          <div className={styles.betRadarLabel}>Wett-Radar · positiver Erwartungswert</div>
+          {valueBets.slice(0, 3).map(b => (
+            <div key={`${b.matchId}-${b.side}`} className={styles.betRadarRow}>
+              <span className={styles.betRadarMatch}>
+                {b.home}-{b.away} · {b.side === 'H' ? 'Heim' : b.side === 'D' ? 'Remis' : 'Gast'}
+              </span>
+              <span className={styles.betRadarEv}>+{(b.ev * 100).toFixed(0)}% EV</span>
+            </div>
+          ))}
+          <div className={styles.betRadarHint}>Kein Wettvorschlag, nur Modellvergleich · siehe Tab Modell</div>
         </div>
       )}
 

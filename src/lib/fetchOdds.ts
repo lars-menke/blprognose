@@ -1,8 +1,13 @@
 import type { MarketProbs } from './poisson';
 
 const ODDS_KEY = import.meta.env.VITE_ODDS_API_KEY ?? '';
-const CACHE_KEY = 'bl_odds_v1';
+const CACHE_KEY = 'bl_odds_events_v1';
 const CACHE_TTL = 6 * 60 * 60 * 1000; // 6h
+
+// Rohe (nicht entvigte) Dezimalquoten je Seite -- gemittelt ueber alle
+// Buchmacher, inkl. Marge. Fuers Wett-Radar (EV braucht echte Auszahlquoten,
+// nicht die faire Modell-Marktwahrscheinlichkeit aus MarketProbs).
+export type RawOdds = { h: number; d: number; a: number };
 
 // The Odds API uses English/simplified team names
 const ODDS_TEAM_MAP: Record<string, string> = {
@@ -37,7 +42,7 @@ type OddsEvent = {
   }>;
 };
 
-function parseOdds(events: OddsEvent[]): Record<string, MarketProbs> {
+function devigOdds(events: OddsEvent[]): Record<string, MarketProbs> {
   const result: Record<string, MarketProbs> = {};
 
   for (const ev of events) {
@@ -79,8 +84,40 @@ function parseOdds(events: OddsEvent[]): Record<string, MarketProbs> {
   return result;
 }
 
-export async function fetchOdds(): Promise<Record<string, MarketProbs>> {
-  if (!ODDS_KEY) return {};
+// Gemittelte Dezimalquoten (inkl. Marge) je Seite -- die tatsaechlich
+// erzielbare Auszahlung, im Gegensatz zu den entvigten MarketProbs.
+function averageRawOdds(events: OddsEvent[]): Record<string, RawOdds> {
+  const result: Record<string, RawOdds> = {};
+
+  for (const ev of events) {
+    const hCode = ODDS_TEAM_MAP[ev.home_team];
+    const aCode = ODDS_TEAM_MAP[ev.away_team];
+    if (!hCode || !aCode) continue;
+
+    let sumH = 0, sumD = 0, sumA = 0, count = 0;
+    for (const bk of ev.bookmakers) {
+      const h2h = bk.markets.find(m => m.key === 'h2h');
+      if (!h2h) continue;
+      const hOut = h2h.outcomes.find(o => o.name === ev.home_team);
+      const dOut = h2h.outcomes.find(o => o.name === 'Draw');
+      const aOut = h2h.outcomes.find(o => o.name === ev.away_team);
+      if (!hOut || !dOut || !aOut) continue;
+      sumH += hOut.price; sumD += dOut.price; sumA += aOut.price; count++;
+    }
+    if (!count) continue;
+
+    result[`${hCode}-${aCode}`] = {
+      h: +(sumH / count).toFixed(2),
+      d: +(sumD / count).toFixed(2),
+      a: +(sumA / count).toFixed(2),
+    };
+  }
+
+  return result;
+}
+
+async function fetchOddsEvents(): Promise<OddsEvent[]> {
+  if (!ODDS_KEY) return [];
 
   try {
     const cached = localStorage.getItem(CACHE_KEY);
@@ -95,16 +132,26 @@ export async function fetchOdds(): Promise<Record<string, MarketProbs>> {
       `https://api.the-odds-api.com/v4/sports/soccer_germany_bundesliga/odds/` +
       `?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal`;
     const r = await fetch(url);
-    if (!r.ok) return {};
+    if (!r.ok) return [];
     const events: OddsEvent[] = await r.json();
-    const data = parseOdds(events);
 
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: events }));
     } catch { /* storage full */ }
 
-    return data;
+    return events;
   } catch {
-    return {};
+    return [];
   }
+}
+
+export async function fetchOdds(): Promise<Record<string, MarketProbs>> {
+  const events = await fetchOddsEvents();
+  return devigOdds(events);
+}
+
+// Fuer das Wett-Radar: rohe Dezimalquoten statt entvigter Modell-Wahrscheinlichkeiten.
+export async function fetchRawOdds(): Promise<Record<string, RawOdds>> {
+  const events = await fetchOddsEvents();
+  return averageRawOdds(events);
 }

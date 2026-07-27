@@ -19,7 +19,7 @@ export function TableScreen({ rows, loading, logos }: Props) {
     <div className={styles.screen}>
       <header className={styles.header}>
         <h1 className={styles.large}>Tabelle</h1>
-        <p className={styles.subtitle}>Bundesliga 2025/26</p>
+        <p className={styles.subtitle}>Bundesliga 2026/27</p>
       </header>
 
       {loading && (

@@ -13,6 +13,21 @@ export const LG_DEF_A = 1.58; // Ø aGA über alle BL1-Teams (Fallback)
 export const DRAW_BOOST_MAX = 0.15;   // max draw boost bei lambdaDiff=0
 export const DRAW_BOOST_RANGE = 0.40; // boost wirkt wenn lambdaDiff < 0.4
 
+// Markt-Gewichtung beim Lambda-Blend (0 = nur Modell, 1 = nur Markt-Lambda aus
+// der Newton-Raphson-Korrektur). Startwert aus der WM-Migration: Log-Loss-Tal
+// lag ueber das gesamte Turnier flach zwischen 0.2 und 0.5, alpha=0.4 ist die
+// Mitte (siehe docs/calibration-analysis.md). Liga-Maerkte sind effizienter
+// als WM-Maerkte -- nach den ersten 5 BL-Spieltagen mit echtem Lernprotokoll
+// re-validieren, das Optimum kann niedriger liegen.
+export const MARKET_BLEND = 0.4;
+
+// Zusaetzlicher Remis-Boost, wenn Modell und Markt unterschiedliche Seiten
+// favorisieren (Vorzeichen-Dissens). WM-Befund: 9 Dissens-Faelle im gesamten
+// Turnier, 44% Remis-Quote vs. 14% bei Einigkeit -- deutlich mehr als Zufall
+// (docs/calibration-analysis.md). Staerke ist ein unkalibrierter Startwert,
+// noch nicht an BL-Daten geprueft -- fruehzeitig mit dem Lernprotokoll pruefen.
+export const DISSENS_DRAW_BOOST_MAX = 0.08;
+
 export type Outcome = 'H' | 'D' | 'A';
 
 export type TeamStats = {
@@ -27,10 +42,13 @@ export type MarketProbs = { h: number; d: number; a: number };
 
 export type CalcResult = {
   pH: number; pD: number; pA: number;
+  pH_model: number; pD_model: number; pA_model: number; // reine Modellsicht: Draw-Boost ja, Markt/Kalibrierung nein
   naturalTipp: string | null;
   wo: Outcome;
   srt: Array<[string, number]>;
   lH: number; lA: number;
+  lH_model: number; lA_model: number; // Lambda vor Marktkorrektur
+  market: MarketProbs | null; // rohe Marktwahrscheinlichkeiten (Prozent), oder null
   fp: number;
   drawBlocked: boolean;
   goalRuleApplied: boolean;
@@ -39,6 +57,7 @@ export type CalcResult = {
   effectiveDrawThreshold: number;
   marketApplied: boolean;
   calibrated: boolean;
+  dissens: boolean; // Modell und Markt favorisieren unterschiedliche Seiten
 };
 
 export type MatchResult = CalcResult & {
@@ -102,6 +121,27 @@ function marketCorrectNR(lH0: number, lA0: number, extP: MarketProbs | null, ite
   return { lH, lA, converged: false };
 }
 
+// Hebt pD an, wenn Teams eng beieinander liegen (lambdaDiff < DRAW_BOOST_RANGE)
+// und/oder ein Modell-Markt-Dissens erkannt wurde (extraBoost). Die Differenz
+// wird proportional aus pH und pA entnommen, damit die Rangfolge erhalten bleibt.
+function applyDrawBoost(
+  rawPH: number, rawPD: number, rawPA: number, lambdaDiff: number, extraBoost = 0,
+): { pH: number; pD: number; pA: number } {
+  const structBoost = lambdaDiff < DRAW_BOOST_RANGE
+    ? DRAW_BOOST_MAX * (1 - lambdaDiff / DRAW_BOOST_RANGE)
+    : 0;
+  const boost = structBoost + extraBoost;
+  if (boost <= 0) return { pH: rawPH, pD: rawPD, pA: rawPA };
+  const boosted = Math.min(0.60, rawPD + boost);
+  const actual = boosted - rawPD;
+  const fromH = actual * rawPH / (rawPH + rawPA);
+  let pH = Math.max(0.05, rawPH - fromH);
+  let pA = Math.max(0.05, rawPA - (actual - fromH));
+  const pD = boosted;
+  const tot = pH + pD + pA;
+  return { pH: pH / tot, pD: pD / tot, pA: pA / tot };
+}
+
 export function calcSingle(
   h: TeamStats,
   a: TeamStats,
@@ -116,35 +156,47 @@ export function calcSingle(
   const effAGF = aForm ? (1 - FORM_WEIGHT) * a.aGF + FORM_WEIGHT * aForm.gf : a.aGF;
   const effAGA = aForm ? (1 - FORM_WEIGHT) * a.aGA + FORM_WEIGHT * aForm.ga : a.aGA;
 
-  let lH = Math.max(0.3, Math.min(4.5, effHGF * (effAGA / LG_DEF_A)));
-  let lA = Math.max(0.3, Math.min(4.5, effAGF * (effHGA / LG_DEF_H)));
+  const lH0 = Math.max(0.3, Math.min(4.5, effHGF * (effAGA / LG_DEF_A)));
+  const lA0 = Math.max(0.3, Math.min(4.5, effAGF * (effHGA / LG_DEF_H)));
 
-  const mc = marketCorrectNR(lH, lA, extP);
-  lH = Math.max(0.3, Math.min(4.5, mc.lH));
-  lA = Math.max(0.3, Math.min(4.5, mc.lA));
+  // Reine Modellsicht (kein Markt) -- Basis fuer Dissens-Erkennung und die
+  // "Modell vs. Markt"-Transparenzanzeige in der Detailkarte.
+  const { pH: rawPH0, pD: rawPD0, pA: rawPA0 } = poisMatrix(lH0, lA0);
+  const modelView = applyDrawBoost(rawPH0, rawPD0, rawPA0, Math.abs(lH0 - lA0));
+  const pH_model = modelView.pH, pD_model = modelView.pD, pA_model = modelView.pA;
+
+  // Marktkorrektur: Newton-Raphson findet das Lambda-Paar, das die Marktquoten
+  // exakt reproduziert, danach wird mit dem Modell-Lambda im Verhaeltnis
+  // MARKET_BLEND gemischt statt voll auf den Markt zu springen.
+  let lH = lH0, lA = lA0;
+  let dissens = false;
+  if (extP) {
+    const mc = marketCorrectNR(lH0, lA0, extP);
+    const lH_mkt = Math.max(0.3, Math.min(4.5, mc.lH));
+    const lA_mkt = Math.max(0.3, Math.min(4.5, mc.lA));
+    lH = Math.max(0.3, Math.min(4.5, lH0 * (1 - MARKET_BLEND) + lH_mkt * MARKET_BLEND));
+    lA = Math.max(0.3, Math.min(4.5, lA0 * (1 - MARKET_BLEND) + lA_mkt * MARKET_BLEND));
+
+    const modelSide = rawPH0 > rawPA0 ? 'H' : rawPA0 > rawPH0 ? 'A' : null;
+    const marketSide = extP.h > extP.a ? 'H' : extP.a > extP.h ? 'A' : null;
+    dissens = modelSide !== null && marketSide !== null && modelSide !== marketSide;
+  }
 
   const { sc, pH: rawPH, pD: rawPD, pA: rawPA } = poisMatrix(lH, lA);
   const srt = Object.entries(sc).sort((x, y) => y[1] - x[1]) as Array<[string, number]>;
 
   const lambdaDiff = Math.abs(lH - lA);
 
-  // Structural draw boost: Poisson under-predicts draws for close games.
-  // Applied before calibration and only when no market correction is active.
-  let bPH = rawPH, bPD = rawPD, bPA = rawPA;
-  if (!extP && lambdaDiff < DRAW_BOOST_RANGE) {
-    const boost = DRAW_BOOST_MAX * (1 - lambdaDiff / DRAW_BOOST_RANGE);
-    const boosted = Math.min(0.55, rawPD + boost);
-    const actual = boosted - rawPD;
-    const fromH = actual * rawPH / (rawPH + rawPA);
-    bPH = Math.max(0.05, rawPH - fromH);
-    bPA = Math.max(0.05, rawPA - (actual - fromH));
-    bPD = boosted;
-    const tot = bPH + bPD + bPA;
-    bPH /= tot; bPD /= tot; bPA /= tot;
-  }
+  // Struktureller Draw-Boost (Poisson unterschaetzt Remis bei engen Spielen),
+  // plus Dissens-Boost wenn Modell und Markt unterschiedliche Seiten favorisieren.
+  const { pH: bPH, pD: bPD, pA: bPA } = applyDrawBoost(
+    rawPH, rawPD, rawPA, lambdaDiff, dissens ? DISSENS_DRAW_BOOST_MAX : 0,
+  );
 
   // Calibration: Platt scaling from past results, or regression-to-mean fallback.
-  // Skip when market correction was applied (market already calibrates).
+  // Skip when market correction was applied -- die Kalibrierung ist auf reine
+  // Modellwahrscheinlichkeiten trainiert (siehe useMatchday.ts calibSamples),
+  // nicht auf marktgeblendete.
   let pH = bPH, pD = bPD, pA = bPA;
   let calibrated = false;
   if (!extP) {
@@ -210,11 +262,14 @@ export function calcSingle(
   if (!naturalTipp) naturalTipp = rawTipp;
 
   return {
-    pH, pD, pA, naturalTipp, wo, srt, lH, lA, fp,
+    pH, pD, pA, pH_model, pD_model, pA_model,
+    naturalTipp, wo, srt, lH, lA, lH_model: lH0, lA_model: lA0, market: extP,
+    fp,
     drawBlocked, goalRuleApplied, favScoreRuleApplied,
     lambdaDiff, effectiveDrawThreshold,
     marketApplied: extP !== null,
     calibrated,
+    dissens,
   };
 }
 

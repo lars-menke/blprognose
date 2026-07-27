@@ -4,7 +4,7 @@
  * Oder im Browser: window.__backtest() nach Einbindung in main.tsx
  */
 
-import { buildDynST, buildMatchEntries, buildForm, fetchSeason, resolveCode, type OldbMatch } from './openligadb';
+import { buildDynST, buildDynSTWithPriors, buildMatchEntries, buildForm, fetchSeason, fetchPrevSeason, resolveCode, type OldbMatch } from './openligadb';
 import { recalcMatches, calcSingle } from './poisson';
 import { FALLBACK_STATS } from './clubs';
 
@@ -54,7 +54,8 @@ export async function runBacktest(minSpieltag = 5): Promise<{
   summary: BacktestSummary;
   rows: BacktestRow[];
 }> {
-  const all = await fetchSeason();
+  const [all, prevAll] = await Promise.all([fetchSeason(), fetchPrevSeason()]);
+  const prevSeasonStats = prevAll.length > 0 ? buildDynST(prevAll, Infinity) : null;
   const played = all.filter(m => m.matchIsFinished && !!getFinalGoals(m));
 
   const rows: BacktestRow[] = [];
@@ -69,7 +70,7 @@ export async function runBacktest(minSpieltag = 5): Promise<{
 
   for (const [nrStr, matchday] of Object.entries(byNr)) {
     const nr = Number(nrStr);
-    const stData = buildDynST(all, nr);
+    const stData = buildDynSTWithPriors(all, nr, prevSeasonStats);
     const entries = buildMatchEntries(all, nr, {}); // no odds for backtest
     const results = recalcMatches(entries, stData, FALLBACK_STATS);
 
@@ -154,7 +155,8 @@ export async function runCalibration(buckets = 10): Promise<Array<{
   actual: string;
   n: number;
 }>> {
-  const all = await fetchSeason();
+  const [all, prevAll] = await Promise.all([fetchSeason(), fetchPrevSeason()]);
+  const prevSeasonStats = prevAll.length > 0 ? buildDynST(prevAll, Infinity) : null;
   const played = all.filter(m => m.matchIsFinished && !!getFinalGoals(m));
 
   const points: Array<{ p: number; hit: boolean }> = [];
@@ -168,7 +170,7 @@ export async function runCalibration(buckets = 10): Promise<Array<{
 
   for (const [nrStr, matchday] of Object.entries(byNr)) {
     const nr = Number(nrStr);
-    const stData = buildDynST(all, nr);
+    const stData = buildDynSTWithPriors(all, nr, prevSeasonStats);
 
     for (const m of matchday) {
       const hC = resolveCode(m.team1);

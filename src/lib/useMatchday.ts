@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchSeason, fetchPrevSeason, fetchLogos, buildDynST, buildMatchEntries, detectCurrentSpieltag, resolveCode } from './openligadb';
-import { fetchOdds } from './fetchOdds';
+import { fetchSeason, fetchPrevSeason, fetchLogos, buildDynST, buildDynSTWithPriors, buildMatchEntries, detectCurrentSpieltag, resolveCode } from './openligadb';
+import { fetchOdds, fetchRawOdds, type RawOdds } from './fetchOdds';
 import { recalcMatches, calcSingle, type MatchResult, type TeamStats } from './poisson';
 import { buildCalib, type CalibSample, type CalibParams } from './calibration';
 import { FALLBACK_STATS } from './clubs';
+import { logPreMatch, logPostMatch } from './learnLog';
+import { computeValueBets, updatePaperLog, type ValueBet } from './betRadar';
+import { isBetRadarEnabled } from './settings';
 import type { MatchEntry, OldbMatch } from './openligadb';
 
 export type MatchdayEntry = {
@@ -11,6 +14,7 @@ export type MatchdayEntry = {
   home: string;
   away: string;
   kickoff: string;
+  kickoffISO: string;
   result: MatchResult;
   actual: { g1: number; g2: number } | null;
 };
@@ -25,6 +29,7 @@ export type MatchdayState = {
   hasMono: boolean;
   hasMarket: boolean;
   hasCalib: boolean;
+  valueBets: ValueBet[];
   setSpielTag: (nr: number) => void;
 };
 
@@ -52,20 +57,47 @@ export function useMatchday(): MatchdayState {
   const [matchesMap, setMatchesMap] = useState<Record<number, MatchEntry[]>>({});
   const [logos, setLogos] = useState<Record<string, string>>({});
   const [calib, setCalib] = useState<CalibParams | null>(null);
+  const [rawOdds, setRawOdds] = useState<Record<string, RawOdds>>({});
 
   const rawMatches = matchesMap[spieltag] ?? [];
   const stData = stDataMap[spieltag] ?? {};
   const results = recalcMatches(rawMatches, stData, FALLBACK_STATS, calib);
 
   const matches: MatchdayEntry[] = rawMatches
-    .map(m => ({ id: m.id, home: m.home, away: m.away, kickoff: m.kickoff, result: results[m.id], actual: m.actual }))
+    .map(m => ({ id: m.id, home: m.home, away: m.away, kickoff: m.kickoff, kickoffISO: m.kickoffISO, result: results[m.id], actual: m.actual }))
     .filter(m => m.result);
 
   const hasMono = matches.some(m => m.result.adjusted);
   const hasMarket = matches.some(m => m.result.marketApplied);
   const hasCalib = calib !== null;
+  const valueBets = isBetRadarEnabled() ? computeValueBets(matches, rawOdds) : [];
 
   const setSpielTag = useCallback((nr: number) => setSpieltagState(nr), []);
+
+  // Wett-Radar: Paper-Trading-Konto abrechnen, sobald Ergebnisse feststehen.
+  useEffect(() => {
+    if (valueBets.length || matches.some(m => m.actual)) updatePaperLog(valueBets, matches);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches]);
+
+  // Passives Lernprotokoll: bei jedem Anzeigen des Spieltags einen Snapshot
+  // schreiben (falls Marktquote vorhanden) und Endergebnisse nachtragen.
+  useEffect(() => {
+    for (const m of matches) {
+      if (m.result.marketApplied && m.result.market) {
+        logPreMatch({
+          matchId: m.id, kickoff: m.kickoffISO,
+          lH_model: m.result.lH_model, lA_model: m.result.lA_model,
+          lH_blend: m.result.lH, lA_blend: m.result.lA,
+          oddsH: m.result.market.h, oddsD: m.result.market.d, oddsA: m.result.market.a,
+        });
+      }
+      if (m.actual) {
+        const actual: 'H' | 'D' | 'A' = m.actual.g1 > m.actual.g2 ? 'H' : m.actual.g1 < m.actual.g2 ? 'A' : 'D';
+        logPostMatch(m.id, actual);
+      }
+    }
+  }, [matches]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +114,10 @@ export function useMatchday(): MatchdayState {
         const newStMap: Record<number, Record<string, TeamStats>> = {};
         const newMatchesMap: Record<number, MatchEntry[]> = {};
         const calibSamples: CalibSample[] = [];
+
+        // Kaltstart-Prior fuer Spieltag 1-5: volle Vorsaison-Statistik, geglaettet
+        // mit der Live-Statistik der laufenden Saison (buildDynSTWithPriors).
+        const prevSeasonStats = prevAll.length > 0 ? buildDynST(prevAll, Infinity) : null;
 
         // Previous season: collect all matchdays 5+ as calibration baseline
         if (prevAll.length > 0) {
@@ -103,7 +139,7 @@ export function useMatchday(): MatchdayState {
         const maxSt = Math.max(...all.map(m => m.group.groupOrderID));
 
         for (let nr = 1; nr <= maxSt; nr++) {
-          const stData = buildDynST(all, nr);
+          const stData = buildDynSTWithPriors(all, nr, prevSeasonStats);
           const entries = buildMatchEntries(all, nr, nr >= current ? oddsMap : {});
           if (!entries.length) continue;
 
@@ -138,9 +174,10 @@ export function useMatchday(): MatchdayState {
 
     init();
     fetchLogos().then(l => { if (!cancelled) setLogos(l); });
+    fetchRawOdds().then(o => { if (!cancelled) setRawOdds(o); });
 
     return () => { cancelled = true; };
   }, []);
 
-  return { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, hasMarket, hasCalib, setSpielTag };
+  return { loading, error, spieltag, trueSpieltag, matches, logos, hasMono, hasMarket, hasCalib, valueBets, setSpielTag };
 }

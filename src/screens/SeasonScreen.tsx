@@ -11,7 +11,7 @@ export function SeasonScreen({ data, loading, logos }: Props) {
     <div className={styles.screen}>
       <header className={styles.header}>
         <h1 className={styles.large}>Saison</h1>
-        <p className={styles.subtitle}>Prognose · Bundesliga 2025/26</p>
+        <p className={styles.subtitle}>Prognose · Bundesliga 2026/27</p>
       </header>
 
       {loading && (

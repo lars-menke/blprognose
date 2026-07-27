@@ -133,6 +133,25 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
           </div>
         </div>
 
+        {/* Modell vs. Markt */}
+        {result.marketApplied && result.market && (
+          <>
+            <div className={styles.sectionLabel}>Modell vs. Markt</div>
+            <div className={styles.sectionCard}>
+              <Row label="Modell (rein)" desc="Ohne Marktkorrektur — reine Poisson+Form-Sicht" value={`${pct(result.pH_model)} / ${pct(result.pD_model)} / ${pct(result.pA_model)}`} />
+              <Row label="Markt" desc="Implizite Buchmacherquote (Mittel über Anbieter)" value={`${result.market.h.toFixed(1)}% / ${result.market.d.toFixed(1)}% / ${result.market.a.toFixed(1)}%`} />
+              {result.dissens && (
+                <div className={styles.rule}>
+                  <span className={styles.ruleIcon}>⚡</span>
+                  <span className={styles.ruleText}>
+                    Dissens — Modell und Markt favorisieren unterschiedliche Seiten. Historisch (WM) ein Remis-Signal, Remis-Wahrscheinlichkeit deshalb zusätzlich angehoben.
+                  </span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {/* Modell-Parameter */}
         <div className={styles.sectionLabel}>Modell</div>
         <div className={styles.sectionCard}>
@@ -146,8 +165,8 @@ export function MatchDetailSheet({ home, away, kickoff, result, homeLogo, awayLo
             value={`${(result.effectiveDrawThreshold * 100).toFixed(0)}%${result.lambdaDiff < 0.25 ? ' (eng)' : ''}`}
           />
           <Row
-            label="Marktkorrektur"
-            desc="Newton-Raphson-Kalibrierung auf Buchmacher-Quoten — passt λH und λA iterativ an bis Modell mit Markt übereinstimmt"
+            label="Marktkorrektur (α=0.4)"
+            desc="Newton-Raphson findet das markt-implizite λ, genutzt wird ein 60/40-Mix aus Modell und Markt statt vollem Sprung auf die Quote"
             value={result.marketApplied ? 'aktiv' : 'inaktiv'}
           />
           <Row

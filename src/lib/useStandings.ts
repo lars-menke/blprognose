@@ -70,7 +70,7 @@ export function useStandings() {
         last5: s.results.slice(-5).reverse() as ('S' | 'U' | 'N')[],
         zone: zoneFor(i + 1),
       })));
-    }).finally(() => setLoading(false));
+    }).catch(e => console.error('useStandings:', e)).finally(() => setLoading(false));
   }, []);
 
   return { rows, loading };
