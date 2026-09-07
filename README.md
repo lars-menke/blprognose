@@ -1,0 +1,105 @@
+# BLforecast — Prognosekern
+
+Gegnerbereinigtes, zeitgewichtetes Poisson/Dixon-Coles-Modell fuer die
+Bundesliga mit Markt-Blend, Entscheidungsebene und Monte-Carlo-Saisonsimulation.
+**Framework-frei:** kein React, kein Server, kein DOM. Laeuft identisch im
+Browser, auf einem Worker und in einem Backtest-Skript.
+
+Das ist Phase 1 des Neuaufbaus. Oberflaeche und Persistenz (Prognose-Freeze,
+Lernuebersicht) folgen in eigenen Phasen und bauen auf dieser Bibliothek auf.
+
+## Schnellstart
+
+```bash
+npm install --legacy-peer-deps   # vitest 4 stolpert sonst ueber einen npm-Peer-Bug
+npm run typecheck
+npm test                         # 77 Tests, ~1 s, komplett offline (synthetische Ligen)
+npm run backtest -- --seasons 2023,2024,2025   # braucht Netz: api.openligadb.de
+```
+
+## Was das Modell tut
+
+| Schicht | Kern |
+|---|---|
+| Teamstaerken | `λ_H = exp(μ + h + a_H + d_A)`, `λ_A = exp(μ + a_A + d_H)` — gemeinsamer Fit aller Angriffs-/Abwehrwerte, Ridge-regularisiert, jeden Schritt zentriert |
+| Aktualitaet | Zeitgewicht `exp(-ln2 · t / 210 Tage)`. Das ist der **einzige** Form-Mechanismus — kein zusaetzlicher Form-Blend |
+| Optimierer | Zwei Stufen. (1) Adam (lr 0.045) mit dem spezifizierten Kriterium: Parameteraenderung < 2e-6 **und** relative Zielfunktionsaenderung < 1e-9 ueber 20 Schritte, ab Schritt 120, max 850. (2) Newton-Politur im Tangentialraum der Zentrierung; **konvergiert** heisst: projizierter Gradient ≤ 1e-6. Grund: Adams Kriterium misst nur den Schrittkollaps und blieb messbar 0,024 ueber dem Minimum stehen -- startwertabhaengig |
+| Matrix | Poisson × Dixon-Coles (ρ = −0.10), mindestens 0..10 Tore, erweitert bis Restmasse ≤ 5e-9. **Kein** Remis-Boost, **keine** Vielfalts-Regel |
+| Aufsteiger | `0.60 · Zweitliga-Rating + ln(Uebersetzungsfaktor)`; Faktor aus frueheren Aufsteigern geschaetzt (Grenzen 0.72–0.96 / 1.04–1.35), Fallback 0.85/1.15 |
+| Markt | The Odds API, Power-De-vig, logarithmischer Pool `norm(p_model^0.6 · p_market^0.4)`, Temperatur 1.10 Modell / 1.00 Markt |
+| Entscheidung | drei Regeln getrennt: bedingter Modus, globaler Modus, Erwartungspunkte 4/3/2. Standard-Hauptregel: `tipGame` (umschaltbar) |
+| Spielprofil | BTTS, Ueber 2,5, erwartete Tore — **ausschliesslich** Zellsummen der finalen Matrix |
+| Simulation | zieht vollstaendige Scores aus **denselben** finalen Matrizen, deterministisch (Seed aus Spiel-IDs + Ergebnissen) |
+
+Alle Parameter: `src/model/params.ts`. Vollstaendige Beschreibung und die
+Befunde, aus denen dieser Neuaufbau hervorging: `docs/review-4.1.1.md`.
+
+## Was gegenueber 4.1.1 korrigiert ist
+
+Die fuenf reproduzierten Fehler des Reviews sind hier von vornherein
+geschlossen — jeder mit Regressionstest:
+
+1. Spielprofil aus der finalen Matrix statt aus den Basis-Lambdas (`derived.ts`)
+2. Live-Endstand: offizieller Resultateintrag hat Vorrang vor unvollstaendiger Torliste (`live.ts`)
+3. Aktueller Spieltag wird **je Saison** bestimmt — Vorsaison-Spieltag 34 uebersteuert Spieltag 2 nicht (`metrics.ts`)
+4. Quoten muessen vor **beiden** Anstosszeiten liegen (OpenLigaDB und Quotenereignis) (`odds.ts`)
+5. Saisonsimulation liest die finalen Matrizen der Prognosen — kein zweiter Rechenweg ohne Markt (`simulation.ts`, `forecast.ts`)
+
+Dazu: Vereins-Identitaet ueber numerische IDs statt gepflegter Namens-Maps,
+Modell/Markt/Blend-Vergleich nur auf derselben Spielmenge, Quotenalter und
+Mindestanzahl Buchmacher als Optionen, Versionsnummer im Backtest aus dem Code.
+
+## Struktur
+
+```
+src/
+  types.ts              gemeinsame Typen
+  model/
+    params.ts           Parametersatz, MODEL_VERSION
+    weights.ts          Zeitgewichtung
+    fit.ts              regularisierter Poisson/DC-Fit (Adam), analytischer Gradient
+    matrix.ts           Tor-/Ergebnismatrix
+    blend.ts            Temperatur, Log-Pool, Rueckverteilung
+    decision.ts         drei Auswahlregeln, 4/3/2-Punkte
+    derived.ts          Spielprofil aus der Matrix
+    promoted.ts         Zweitliga-Uebersetzung, Priors
+    simulation.ts       Monte-Carlo-Saison
+    random.ts           deterministischer Zufall
+  data/
+    openliga.ts         Laden, Normalisieren, Deduplizieren, Pruefen
+    live.ts             Live-Status und Spielstand
+    season.ts           Saisonzuordnung (1. Juli)
+    cache.ts            Datei-Cache fuer Skripte
+  market/odds.ts        The Odds API, Zuordnung, De-vig, Zeitregeln
+  evaluation/metrics.ts Log-Loss, Brier, RPS (ungeteilt), Punkte, gleiche Teilmenge
+  forecast.ts           Orchestrator: Datensatz -> Modell -> Prognoseobjekt -> Simulation
+scripts/backtest.ts     Roll-forward-Ruecktest gegen Liga-Poisson-Basis
+tests/                  77 Tests, u.a. Finite-Differenzen-Gradient, Parameter-Rueckgewinnung, Startwert-Unabhaengigkeit
+```
+
+## Was belegt ist — und was nicht
+
+Belegt (Tests, offline): Gradient stimmt mit Finite-Differenzen ueberein
+(< 1e-5), der Fit gewinnt die Parameter einer synthetischen Liga zurueck,
+Warm- und Kaltstart erreichen dasselbe Optimum (< 1e-5), projizierter
+Gradient am Ende ≤ 1e-6, alle Matrix-/Blend-Invarianten, alle fuenf
+Review-Fehler.
+
+Ein Befund aus dem Bau, der auch 4.1.1 betrifft: Das dort verwendete
+Konvergenzkriterium (Parameteraenderung + Zielfunktionsaenderung) erklaert
+Adam fuer konvergiert, sobald sein Schritt kollabiert -- nicht, wenn der
+Gradient null ist. Gemessen: ein Warmstart wurde 4,5e-3 neben dem Optimum
+als konvergiert gemeldet, und beide Startarten blieben 0,024 ueber dem
+Minimum. Deshalb die Newton-Stufe mit projiziertem Gradienten. Am Modell
+aendert das nichts, am Nachweis viel.
+
+**Nicht belegt:** die Prognoseguete auf echten Daten. Dieser Kern wurde ohne
+Netzwerkzugriff gebaut. Der erste Lauf von `npm run backtest` gegen OpenLigaDB
+ist die Abnahme — Referenzwerte aus dem Review fuer 4.1.1 auf 918 Spielen:
+1X2 52,51 %, Log-Loss 0,99025, exakt (bedingt) 8,28 %. Abweichungen nach oben
+oder unten sind zu erwarten, weil Aufsteiger-Priors und Entscheidungsregel
+veraendert wurden; sie muessen erklaert, nicht wegoptimiert werden.
+
+Weiter offen: Marktgewicht 0.40 und Temperaturen sind nicht auf BL-Daten
+validiert (braucht historische Quoten), kein unangetasteter Testzeitraum,
+keine innere Parametersuche. Siehe `docs/review-4.1.1.md`, Abschnitt 18.
