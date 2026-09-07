@@ -44,11 +44,7 @@ Einordnung der Groessenordnung: Der Abstand Modell zu Basis betraegt 0,091. Die 
 
 `DEFAULT_PARAMS` bleiben unveraendert (Regel 7: keine Aenderung ohne Nachweis auf einem getrennten Zeitraum). Diese drei Saisons sind dieselben, auf denen 4.1.1 bewertet wurde; ein Gewinn der Standardwerte ist hier teilweise erwartbar, ein Verlust waere aussagekraeftiger gewesen.
 
-Offen bleibt ρ −0,13 als einzige Variante mit Verbesserung in Log-Loss **und** Punkten. Naechster Schritt fuer eine Entscheidung:
-
-1. `npm run compare` auf den beiden Laeufen (Default vs `rho=-0.13`), um zu sehen, ob die Je-Spiel-Differenz ein Intervall ohne 0 hat.
-2. Wenn ja: Bestaetigung auf einer Saison, die keine Parameterwahl gesehen hat. 2022/23 ist dafuer geeignet (`--seasons 2022`, braucht 2020 und 2021 als Vorsaisons, beide in OpenLigaDB vorhanden).
-3. Erst dann Aenderung in `params.ts`, mit Verweis auf dieses Dokument.
+ρ −0,13 blieb als einzige Variante mit Verbesserung in Log-Loss **und** Punkten zunaechst offen. Der gepaarte Vergleich und die ungesehene Saison 2022/23 (Abschnitte 5 und 6) haben die Frage geschlossen: nicht unterscheidbar, ρ bleibt −0,10.
 
 ## 4. Werkzeug
 
@@ -60,6 +56,51 @@ npm run compare -- .cache/runs/default.json .cache/runs/rho13.json
 
 `compare` paart die Spiele ueber die OpenLigaDB-ID, berechnet die Differenz B minus A je Spiel fuer Log-Loss, Brier, RPS, 1X2-Treffer, exakte Treffer und tipGame-Punkte, dazu 95-%-Bootstrap-Intervall, Vorzeichentest und Aufteilung je Saison.
 
-## 5. Was weiterhin nicht belegt ist
+## 5. Gepaarter Vergleich rho −0,10 gegen −0,13 (Laeufe 11:38 bis 11:39 UTC)
+
+### 5.1 Auf 2023/24 bis 2025/26 (918 Spiele, dieselben Saisons wie oben)
+
+| Metrik | Mittel B−A | 95 % Bootstrap | Vorzeichen −/+ | Urteil |
+|---|---:|---:|---:|---|
+| Log-Loss 1X2 | −0,00023 | [−0,00077; +0,00076] | 236 / 682 | nicht unterscheidbar |
+| Brier | −0,00001 | [−0,00032; +0,00059] | 237 / 681 | nicht unterscheidbar |
+| RPS | +0,00001 | [−0,00008; +0,00025] | 325 / 593 | nicht unterscheidbar |
+| 1X2-Treffer | −0,001 | [−0,003; 0] | 1 / 0 | nicht unterscheidbar |
+| exakt (conditional) | 0 | | 1 / 1 | nicht unterscheidbar |
+| Punkte tipGame | +0,023 | [+0,003; +0,050] | 7 / 11 | Intervall knapp ohne 0 |
+
+Das Muster ist eindeutig: rho −0,13 macht 682 von 918 Spielen minimal schlechter und 236 deutlich besser (die Remis und niedrigen Ergebnisse). Das Mittel wird von einer kleinen Teilmenge getragen, das Intervall enthaelt die 0. Bei den Punkten liegt das Intervall knapp ausserhalb, aber nur 18 Spiele haben ueberhaupt einen anderen Tipp, Vorzeichentest p = 0,35. Das ist keine Evidenz.
+
+### 5.2 Auf 2022/23 (306 Spiele, von keiner Parameterwahl gesehen)
+
+| Metrik | Mittel B−A | 95 % Bootstrap | Vorzeichen −/+ |
+|---|---:|---:|---:|
+| Log-Loss 1X2 | −0,00005 | [−0,00193; +0,00111] | 75 / 231 |
+| Brier | +0,00009 | [−0,00095; +0,00076] | 75 / 231 |
+| Punkte tipGame | 0,000 | [−0,020; +0,029] | 1 / 1 |
+
+Identische Tipps bis auf zwei Spiele, die sich gegenseitig aufheben. Nichts.
+
+**Entscheidung: rho bleibt −0,10.** Der Kandidat ist geschlossen. Die Zellen 0:0 und 1:1 reagieren auf rho, die 1X2-Guete nicht; ein Wert zwischen −0,10 und −0,13 ist auf Bundesligadaten dieser Groessenordnung nicht unterscheidbar. Wenn spaeter eine feste Schaetzung ueber viele Saisons erfolgt (v2.1, Abschnitt 7), ist das der Weg; eine Ablation auf drei Saisons kann das nicht leisten.
+
+## 6. Ungesehene Saison 2022/23: das eigentliche Ergebnis
+
+Als Nebenprodukt der rho-Frage lief 4.2.1 zum ersten Mal auf einer Saison, die keine Parameterentscheidung von 4.1.1 oder 4.2.x gesehen hat (Training aus 2020/21 und 2021/22 plus laufende Saison).
+
+| | Modell 4.2.1 | Liga-Poisson-Basis |
+|---|---:|---:|
+| 1X2 | 52,29 % | 47,39 % |
+| Log-Loss | 1,00113 | 1,05713 |
+| exakt cond / global / tipGame | 10,13 / 11,76 / 10,13 % | 8,50 / 12,42 / 8,50 % |
+| Brier | 0,60000 | 0,63781 |
+| RPS | 0,41349 | 0,45247 |
+| Pkt/Spiel | 1,356 | 1,203 |
+| Fits nicht konvergiert | 0/34 | |
+
+Log-Loss-Differenz Modell minus Basis: **−0,0560**, Bootstrap [−0,1021; −0,0159]. Das Intervall liegt ohne 0, auf einer Saison, an der nichts eingestellt wurde. Der Abstand ist kleiner als auf 2023 bis 2025 (−0,091), vor allem weil die Basis 2022/23 staerker war (47,4 % statt 42 % 1X2: eine Saison mit ausgepraegtem Heimvorteil und wenig Ueberraschungen). Die 1X2-Quote des Modells liegt mit 52,3 % auf dem Niveau der drei anderen Saisons.
+
+Das ist der bislang belastbarste Guete-Nachweis des Modells: Out-of-sample im strengen Sinn, wenn auch nur eine Saison und ohne Marktvergleich.
+
+## 7. Was weiterhin nicht belegt ist
 
 Kein Marktvergleich, kein unangetasteter Testzeitraum, keine innere Parametersuche, keine Kalibrierungskurve. Siehe `docs/review-4.1.1.md`, Abschnitte 15 und 18.

@@ -90,6 +90,12 @@ async function main(): Promise<void> {
     }).join('  ');
     console.log(`${m.name.padEnd(20)} Mittel ${f4(mean)}  95% [${f4(lo)}; ${f4(hi)}]  Vorzeichen -${st.neg}/+${st.pos} p=${st.p.toFixed(3)}  -> ${verdict}`);
     console.log(`${''.padEnd(20)} je Saison  ${perSeason}`);
+    // Mittel und Mehrheit der Vorzeichen widersprechen sich: typisch fuer einen
+    // Parameter, der viele Spiele minimal verschlechtert und wenige deutlich
+    // verbessert (oder umgekehrt). Dann traegt eine kleine Teilmenge das Mittel.
+    if (st.p < 0.05 && Math.sign(mean) !== Math.sign(st.pos - st.neg) && mean !== 0) {
+      console.log(`${''.padEnd(20)} Hinweis: Mehrheit der Spiele geht in die andere Richtung als das Mittel -- wenige Spiele tragen die Differenz.`);
+    }
   }
   console.log('\nLesart: "besser" heisst nur auf diesen Saisons. Fuer eine Freigabe zaehlt ein Zeitraum, den keine Parameterwahl gesehen hat (v2.1, 14.2).');
 }

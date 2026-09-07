@@ -113,8 +113,12 @@ Kappungsgrenze, wo die in der Likelihood gekappte Zielfunktion einen Knick
 hat. 4.2.1 nimmt die Kappung aus der Schaetzung. **Abnahme 4.2.1**
 (`docs/backtest-4.2.1.md`): 0 von 102 Fits nicht konvergiert, Log-Loss
 0,99042, 1X2 52,72 %; nur 2023/24 hat sich bewegt. Ablationen dort:
-Halbwertszeit 180 und ρ-Schaetzung schlechter, ρ = −0,13 leicht besser
-(Kandidat, kein Nachweis auf getrenntem Zeitraum).
+Halbwertszeit 180 und ρ-Schaetzung schlechter, ρ = −0,13 im gepaarten
+Vergleich nicht unterscheidbar, Parameter unveraendert.
+
+**Ungesehene Saison 2022/23** (keine Parameterwahl hat sie gesehen): 1X2
+52,29 %, Log-Loss 1,00113, gegen Liga-Poisson-Basis −0,056, Bootstrap
+[−0,102; −0,016]. Das ist der bislang strengste Guete-Nachweis.
 
 Weiter offen: Marktgewicht 0.40 und Temperaturen sind nicht auf BL-Daten
 validiert (braucht historische Quoten), kein unangetasteter Testzeitraum,

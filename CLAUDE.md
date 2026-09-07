@@ -88,9 +88,11 @@ Befund dabei: Kappung in der Likelihood erzeugt einen Knick; nach einem 8:0
 sass das Optimum neun Spieltage darauf, unkonvergierbar. 4.2.1 kappt nur
 noch in der Prognose; Abnahme bestanden (0/102 Warnungen, Log-Loss
 0,99042, `docs/backtest-4.2.1.md`). Ablationen ebenda: Halbwertszeit 180
-und `estimateRho` schlechter, `rho=-0.13` leicht besser (Log-Loss −0,0002,
-+0,023 Pkt/Spiel) -- **Kandidat**, Nachweis per `npm run compare` und auf
-2022/23 als ungesehener Saison noch offen. Parameter unveraendert.
+und `estimateRho` schlechter, `rho=-0.13` im gepaarten Vergleich nicht
+unterscheidbar (682 von 918 Spielen minimal schlechter, 236 besser,
+Intervall mit 0; auf 2022/23 identisch). Parameter unveraendert.
+**Ungesehene Saison 2022/23:** 1X2 52,29 %, Log-Loss 1,00113, gegen Basis
+−0,056 [−0,102; −0,016]. Erster Out-of-sample-Nachweis im strengen Sinn.
 
 Naechste Phasen:
 - Phase 2: Persistenz und Freeze (Vorabprognosen mit DB-Zeit, Parametersatz,
