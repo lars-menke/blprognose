@@ -9,6 +9,9 @@
 // --params ueberschreibt einzelne Werte aus DEFAULT_PARAMS (Zahlen, true/false)
 // fuer Ablationen. Der Berichtskopf zeigt die Abweichungen; ohne --params
 // laeuft der freigegebene Satz.
+// --out <datei.json> schreibt die Prognosen je Spiel, damit zwei Laeufe mit
+// scripts/compare.ts gepaart verglichen werden koennen (der Bootstrap gegen
+// die Basis sagt nichts ueber den Unterschied zweier Modellvarianten).
 //
 // Einordnung (Review 15.1/15.4): Das ist ein retrospektiver Test auf Saisons,
 // die fruehere Parameterentscheidungen moeglicherweise schon gesehen haben --
@@ -19,6 +22,8 @@
 // Braucht Netzwerkzugriff auf api.openligadb.de. Abgeschlossene Saisons
 // werden unter .cache/openliga gecacht.
 
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { CachedSource } from '../src/data/cache.ts';
 import { OpenLigaSource } from '../src/data/openliga.ts';
 import { seasonOf } from '../src/data/season.ts';
@@ -55,8 +60,29 @@ function parseOverrides(spec: string | undefined): Partial<ModelParams> {
 }
 const overrides = parseOverrides(arg('params'));
 const PARAMS = withParams(overrides);
+const outFile = arg('out');
+
+/** Je-Spiel-Zeile fuer den gepaarten Vergleich zweier Laeufe (scripts/compare.ts). */
+export interface ExportRow {
+  id: number;
+  season: number;
+  matchday: number;
+  actual: Score;
+  probs: OutcomeProbs;
+  conditional: Score;
+  global: Score;
+  tipGame: Score;
+}
+export interface ExportFile {
+  modelVersion: string;
+  overrides: Record<string, number | boolean>;
+  seasons: number[];
+  createdAt: string;
+  rows: ExportRow[];
+}
 
 interface Row {
+  id: number;
   season: number;
   matchday: number;
   actual: Score;
@@ -154,7 +180,7 @@ async function main(): Promise<void> {
         const cond = { home: f.decisions.conditional.score.home, away: f.decisions.conditional.score.away };
         const glob = { home: f.decisions.global.home, away: f.decisions.global.away };
         rows.push({
-          season, matchday: md, actual, model: f.probabilities, matrix: f.scoreMatrix, lambda: { home: f.lambda.home, away: f.lambda.away },
+          id: m.id, season, matchday: md, actual, model: f.probabilities, matrix: f.scoreMatrix, lambda: { home: f.lambda.home, away: f.lambda.away },
           conditional: cond, global: glob, tipGame: f.decisions.tipGame.score,
           base: baseMatrix.probs, baseMatrix, baseConditional: { home: baseCond.score.home, away: baseCond.score.away },
           baseGlobal: { home: baseGlob.home, away: baseGlob.away }, baseLambda: { home: bH, away: bA },
@@ -191,6 +217,16 @@ async function main(): Promise<void> {
   const top = [...total.scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   console.log(`Haeufigste Primaerscores (conditional): ${top.map(([k, v]) => `${k} ${pct(v / total.n)}`).join(', ')}  |  verschiedene Scores: ${total.scores.size}`);
   console.log('\nHinweis: kein Marktvergleich, kein unangetasteter Testzeitraum, keine innere Parametersuche. Siehe docs/review-4.1.1.md Abschnitt 15.');
+
+  if (outFile) {
+    const file: ExportFile = {
+      modelVersion: MODEL_VERSION, overrides: overrides as Record<string, number | boolean>, seasons, createdAt: now.toISOString(),
+      rows: rows.map(r => ({ id: r.id, season: r.season, matchday: r.matchday, actual: r.actual, probs: r.model, conditional: r.conditional, global: r.global, tipGame: r.tipGame })),
+    };
+    await mkdir(dirname(outFile), { recursive: true });
+    await writeFile(outFile, JSON.stringify(file));
+    console.log(`Prognosen je Spiel geschrieben: ${outFile} (${rows.length} Zeilen)`);
+  }
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

@@ -16,6 +16,8 @@ npm run typecheck
 npm test                         # 78 Tests, ~1 s, komplett offline (synthetische Ligen)
 npm run backtest -- --seasons 2023,2024,2025   # braucht Netz: api.openligadb.de
 npm run backtest -- --seasons 2023,2024,2025 --params halfLifeDays=180   # Ablation
+npm run backtest -- --seasons 2023,2024,2025 --out .cache/runs/a.json     # je Spiel exportieren
+npm run compare -- .cache/runs/a.json .cache/runs/b.json                  # gepaarter Vergleich zweier Laeufe
 ```
 
 ## Was das Modell tut
@@ -75,9 +77,11 @@ src/
   market/odds.ts        The Odds API, Zuordnung, De-vig, Zeitregeln
   evaluation/metrics.ts Log-Loss, Brier, RPS (ungeteilt), Punkte, gleiche Teilmenge
   forecast.ts           Orchestrator: Datensatz -> Modell -> Prognoseobjekt -> Simulation
-scripts/backtest.ts     Roll-forward-Ruecktest gegen Liga-Poisson-Basis
+scripts/backtest.ts     Roll-forward-Ruecktest gegen Liga-Poisson-Basis, --params fuer Ablationen, --out je Spiel
+scripts/compare.ts      gepaarter Bootstrap zweier Laeufe (Log-Loss, Brier, RPS, Treffer, Punkte, je Saison)
 tests/                  78 Tests, u.a. Finite-Differenzen-Gradient, Parameter-Rueckgewinnung, Startwert-Unabhaengigkeit, Knick-Reproduktion
 docs/backtest-4.2.0.md  erster Ruecktest auf echten Daten, Befund und Fix
+docs/backtest-4.2.1.md  Abnahme 4.2.1, Ablationen, Entscheidung
 ```
 
 ## Was belegt ist — und was nicht
@@ -106,8 +110,11 @@ Bootstrap-Intervall [−0,126; −0,079].
 Derselbe Lauf zeigte acht nicht konvergierte Fits (2023/24, Spieltage
 10–18): das Optimum sass nach dem 8:0 Bayern–Darmstadt exakt auf der
 Kappungsgrenze, wo die in der Likelihood gekappte Zielfunktion einen Knick
-hat. 4.2.1 nimmt die Kappung aus der Schaetzung; der Ruecktest fuer 4.2.1
-steht aus.
+hat. 4.2.1 nimmt die Kappung aus der Schaetzung. **Abnahme 4.2.1**
+(`docs/backtest-4.2.1.md`): 0 von 102 Fits nicht konvergiert, Log-Loss
+0,99042, 1X2 52,72 %; nur 2023/24 hat sich bewegt. Ablationen dort:
+Halbwertszeit 180 und ρ-Schaetzung schlechter, ρ = −0,13 leicht besser
+(Kandidat, kein Nachweis auf getrenntem Zeitraum).
 
 Weiter offen: Marktgewicht 0.40 und Temperaturen sind nicht auf BL-Daten
 validiert (braucht historische Quoten), kein unangetasteter Testzeitraum,

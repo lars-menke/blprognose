@@ -21,6 +21,8 @@ npm run typecheck                    # tsc --noEmit, strict
 npm test                             # vitest, offline, ~1 s
 npm run backtest -- --seasons 2023,2024,2025   # braucht Netz
 npm run backtest -- --seasons 2023,2024,2025 --params halfLifeDays=180,rho=-0.13   # Ablation
+npm run backtest -- --seasons 2023,2024,2025 --out .cache/runs/a.json     # je Spiel exportieren
+npm run compare -- .cache/runs/a.json .cache/runs/b.json                  # gepaarter Vergleich
 ```
 
 Der Ruecktest laeuft nicht in dieser Umgebung (kein Netz). Ergebnisse kommen
@@ -84,8 +86,11 @@ Log-Loss 0,99047 -- Reproduktion von 4.1.1 (52,51 % / 0,99025); gegen
 Liga-Poisson-Basis -0,091 Log-Loss, Bootstrap [-0,126; -0,079].
 Befund dabei: Kappung in der Likelihood erzeugt einen Knick; nach einem 8:0
 sass das Optimum neun Spieltage darauf, unkonvergierbar. 4.2.1 kappt nur
-noch in der Prognose. **Offen:** Ruecktest 4.2.1 (Erwartung: keine
-Warnung, Guete innerhalb ~0,002 Log-Loss), Ablationen ueber `--params`.
+noch in der Prognose; Abnahme bestanden (0/102 Warnungen, Log-Loss
+0,99042, `docs/backtest-4.2.1.md`). Ablationen ebenda: Halbwertszeit 180
+und `estimateRho` schlechter, `rho=-0.13` leicht besser (Log-Loss −0,0002,
++0,023 Pkt/Spiel) -- **Kandidat**, Nachweis per `npm run compare` und auf
+2022/23 als ungesehener Saison noch offen. Parameter unveraendert.
 
 Naechste Phasen:
 - Phase 2: Persistenz und Freeze (Vorabprognosen mit DB-Zeit, Parametersatz,
