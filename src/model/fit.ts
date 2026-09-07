@@ -10,10 +10,19 @@
 // invariant gegen a -> a + k, mu -> mu - k, die Zentrierung macht die Loesung
 // eindeutig und die Ratings ueber Fits hinweg vergleichbar.
 //
-// Lambdas werden auch WAEHREND des Fits auf [lambdaMin, lambdaMax] gekappt;
-// ausserhalb der Grenze ist der zugehoerige Daten-Gradient null. Das ist eine
-// numerische Schutzmassnahme, keine robuste Ausreisserbehandlung -- sie wird
-// deshalb als clippedShare ausgewiesen.
+// Kappung: Die Grenzen [lambdaMin, lambdaMax] gelten fuer die PROGNOSE
+// (lambdasFor). In der Schaetzung wird seit 4.2.1 nicht mehr gekappt, denn
+// eine Kappung in der Likelihood (Daten-Gradient 0 ausserhalb) macht die
+// Zielfunktion an der Grenze unstetig differenzierbar. Liegt das Optimum
+// genau dort -- im Ruecktest 2023/24 nach dem 8:0 Bayern-Darmstadt neun
+// Spieltage lang -- gibt es keinen Punkt mit Gradient 0: von unten schiebt
+// das Spiel mit (x - lambda) w, von oben ist es stumm. Adam pendelt, Newton
+// kriecht an den Knick, "konvergiert" ist unerreichbar. Synthetisch
+// reproduziert (tests/model-core.test.ts, "Knick"). Ohne Kappung ist die
+// Zielfunktion glatt und strikt konvex; Ausreisser daempft der Ridge. Der
+// Anteil der Trainingsspiele ausserhalb der Grenzen bleibt als clippedShare
+// ein Diagnosewert (v2.1, Abschnitt 6: haeufige Begrenzung = Datenproblem).
+// Altes Verhalten per params.clipInTraining fuer die Ablation.
 //
 // Optimierung in zwei Stufen:
 //   1. Adam, exakt wie spezifiziert (lr, Momente, Parameter-/Zielfunktions-
@@ -112,11 +121,13 @@ export function objectiveAndGradient(
 
     const rawH = Math.exp(mu + home + aH + dA);
     const rawA = Math.exp(mu + aA + dH);
-    const clipH = rawH < lambdaMin || rawH > lambdaMax;
-    const clipA = rawA < lambdaMin || rawA > lambdaMax;
-    const lH = clip(rawH, lambdaMin, lambdaMax);
-    const lA = clip(rawA, lambdaMin, lambdaMax);
-    if (clipH || clipA) clipped++;
+    const outH = rawH < lambdaMin || rawH > lambdaMax;
+    const outA = rawA < lambdaMin || rawA > lambdaMax;
+    if (outH || outA) clipped++;
+    const clipH = params.clipInTraining && outH;
+    const clipA = params.clipInTraining && outA;
+    const lH = clipH ? clip(rawH, lambdaMin, lambdaMax) : rawH;
+    const lA = clipA ? clip(rawA, lambdaMin, lambdaMax) : rawA;
 
     const x = m.homeGoals, y = m.awayGoals;
 
@@ -132,7 +143,7 @@ export function objectiveAndGradient(
     const ll = x * Math.log(lH) - lH + y * Math.log(lA) - lA + Math.log(tau);
     negLogLik -= w * ll;
 
-    // d ll / d theta_H = (x/lH - 1 + dTauH/tau) * dlH/dthetaH, dlH/dthetaH = lH oder 0 (gekappt)
+    // d ll / d theta_H = (x/lH - 1 + dTauH/tau) * dlH/dthetaH, dlH/dthetaH = lH; 0 nur bei Kappung in der Schaetzung
     const dThetaH = clipH ? 0 : (x / lH - 1 + dTauH / tau) * lH;
     const dThetaA = clipA ? 0 : (y / lA - 1 + dTauA / tau) * lA;
 

@@ -4,6 +4,11 @@
 // Stichtag gesetzt; trainiert wird ausschliesslich mit Spielen davor.
 //
 //   npm run backtest -- --seasons 2023,2024,2025
+//   npm run backtest -- --seasons 2023,2024,2025 --params halfLifeDays=180,rho=-0.13
+//
+// --params ueberschreibt einzelne Werte aus DEFAULT_PARAMS (Zahlen, true/false)
+// fuer Ablationen. Der Berichtskopf zeigt die Abweichungen; ohne --params
+// laeuft der freigegebene Satz.
 //
 // Einordnung (Review 15.1/15.4): Das ist ein retrospektiver Test auf Saisons,
 // die fruehere Parameterentscheidungen moeglicherweise schon gesehen haben --
@@ -18,7 +23,7 @@ import { CachedSource } from '../src/data/cache.ts';
 import { OpenLigaSource } from '../src/data/openliga.ts';
 import { seasonOf } from '../src/data/season.ts';
 import { buildForecasts, loadDataset, prepareSeasonModel, type Forecast } from '../src/forecast.ts';
-import { MODEL_VERSION, DEFAULT_PARAMS } from '../src/model/params.ts';
+import { MODEL_VERSION, DEFAULT_PARAMS, withParams, type ModelParams } from '../src/model/params.ts';
 import { buildMatrix } from '../src/model/matrix.ts';
 import { redistribute, temper } from '../src/model/blend.ts';
 import { conditionalMode, globalMode, tipGameMode, tipPoints } from '../src/model/decision.ts';
@@ -34,6 +39,22 @@ const now = new Date();
 const defaultSeasons = [3, 2, 1].map(k => seasonOf(now) - k);
 const seasons = (arg('seasons')?.split(',').map(Number) ?? defaultSeasons).filter(Number.isFinite);
 const cacheDir = arg('cache') ?? '.cache/openliga';
+
+function parseOverrides(spec: string | undefined): Partial<ModelParams> {
+  const out: Record<string, number | boolean> = {};
+  if (!spec) return out;
+  for (const pair of spec.split(',')) {
+    const [key, raw] = pair.split('=');
+    if (!(key in DEFAULT_PARAMS)) throw new Error(`Unbekannter Parameter: ${key}`);
+    const value = raw === 'true' ? true : raw === 'false' ? false : Number(raw);
+    if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(`Ungueltiger Wert fuer ${key}: ${raw}`);
+    if (typeof value !== typeof (DEFAULT_PARAMS as Record<string, unknown>)[key]) throw new Error(`Typ passt nicht fuer ${key}: ${raw}`);
+    out[key] = value;
+  }
+  return out as Partial<ModelParams>;
+}
+const overrides = parseOverrides(arg('params'));
+const PARAMS = withParams(overrides);
 
 interface Row {
   season: number;
@@ -91,7 +112,9 @@ function printAcc(label: string, a: Acc): void {
 
 async function main(): Promise<void> {
   console.log(`BLforecast Ruecktest -- Modell ${MODEL_VERSION} (aus src/model/params.ts), Stand ${now.toISOString()}`);
-  console.log(`Saisons: ${seasons.join(', ')}  |  Pfad: reines Modell (keine historischen Quoten)  |  Cache: ${cacheDir}\n`);
+  const ov = Object.entries(overrides).map(([k, v]) => `${k}=${v}`).join(', ');
+  console.log(`Saisons: ${seasons.join(', ')}  |  Pfad: reines Modell (keine historischen Quoten)  |  Cache: ${cacheDir}`);
+  console.log(`Parameter: ${ov ? `ABWEICHEND ${ov}` : 'DEFAULT_PARAMS (freigegeben)'}\n`);
 
   const source = new CachedSource(new OpenLigaSource({ onIssues: (l, s, issues) => {
     for (const i of issues) if (i.level === 'error') console.warn(`[${l}/${s}] ${i.message}`);
@@ -104,13 +127,15 @@ async function main(): Promise<void> {
     const data = await loadDataset(source, season);
     const matchdays = [...new Set(data.current.map(m => m.matchday))].sort((a, b) => a - b);
     const seasonAcc = acc(), seasonBase = acc();
+    let notConverged = 0, maxClipped = 0;
     const t0 = Date.now();
     for (const md of matchdays) {
       const day = data.current.filter(m => m.matchday === md && m.finished);
       if (!day.length) continue;
       const first = Math.min(...day.map(m => Date.parse(m.kickoff)));
       const asOf = new Date(first - 60_000);
-      const model = prepareSeasonModel(data, asOf, DEFAULT_PARAMS);
+      const model = prepareSeasonModel(data, asOf, PARAMS);
+      maxClipped = Math.max(maxClipped, model.diagnostics.final.clippedShare);
       // Prognosen fuer den Spieltag: Spiele gelten zum Stichtag als offen
       const asOpen: MatchRecord[] = day.map(m => ({ ...m, finished: false, homeGoals: null, awayGoals: null }));
       const forecasts: Forecast[] = buildForecasts(model, asOpen);
@@ -119,8 +144,8 @@ async function main(): Promise<void> {
       const train = [...data.previousBl1.flat(), ...data.current].filter(m => m.finished && Date.parse(m.kickoff) < asOf.getTime());
       const bH = train.reduce((s, m) => s + m.homeGoals!, 0) / train.length;
       const bA = train.reduce((s, m) => s + m.awayGoals!, 0) / train.length;
-      const baseRaw = buildMatrix(bH, bA, DEFAULT_PARAMS.rho);
-      const baseMatrix = redistribute(baseRaw, temper(baseRaw.probs, DEFAULT_PARAMS.modelTemperature));
+      const baseRaw = buildMatrix(bH, bA, PARAMS.rho);
+      const baseMatrix = redistribute(baseRaw, temper(baseRaw.probs, PARAMS.modelTemperature));
       const baseCond = conditionalMode(baseMatrix), baseGlob = globalMode(baseMatrix);
 
       for (const f of forecasts) {
@@ -136,13 +161,17 @@ async function main(): Promise<void> {
         });
         add(seasonAcc, f.probabilities, f.scoreMatrix, f.lambda, cond, glob, f.decisions.tipGame.score, actual);
         add(total, f.probabilities, f.scoreMatrix, f.lambda, cond, glob, f.decisions.tipGame.score, actual);
-        const bTip = tipGameMode(baseMatrix, DEFAULT_PARAMS.tipSearchMaxGoals).score;
+        const bTip = tipGameMode(baseMatrix, PARAMS.tipSearchMaxGoals).score;
         add(seasonBase, baseMatrix.probs, baseMatrix, { home: bH, away: bA }, { home: baseCond.score.home, away: baseCond.score.away }, { home: baseGlob.home, away: baseGlob.away }, bTip, actual);
         add(baseTotal, baseMatrix.probs, baseMatrix, { home: bH, away: bA }, { home: baseCond.score.home, away: baseCond.score.away }, { home: baseGlob.home, away: baseGlob.away }, bTip, actual);
       }
-      if (!model.diagnostics.final.converged) console.warn(`  Spieltag ${md}: Fit nicht konvergiert (${model.diagnostics.final.iterations} Schritte)`);
+      if (!model.diagnostics.final.converged) {
+        notConverged++;
+        const d = model.diagnostics.final;
+        console.warn(`  Spieltag ${md}: Fit nicht konvergiert (${d.iterations} Schritte, proj. Gradient ${d.gradientNorm.toExponential(2)}, Lambda ausserhalb Grenzen ${pct(d.clippedShare)} der Trainingsspiele)`);
+      }
     }
-    console.log(`Saison ${season}/${String((season + 1) % 100).padStart(2, '0')}  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+    console.log(`Saison ${season}/${String((season + 1) % 100).padStart(2, '0')}  (${((Date.now() - t0) / 1000).toFixed(1)} s)  Fits nicht konvergiert: ${notConverged}/${matchdays.length}  max. Anteil Lambda ausserhalb Grenzen: ${pct(maxClipped)}`);
     printAcc('  Modell', seasonAcc);
     printAcc('  Liga-Poisson-Basis', seasonBase);
   }

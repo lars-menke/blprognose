@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildMatrix, dcTau, matrixSize, outcomeProbs, poissonPmf, MIN_GOALS } from '../src/model/matrix.ts';
-import { buildLayout, fitRatings, objectiveAndGradient, type FitMatch } from '../src/model/fit.ts';
+import { buildLayout, fitRatings, lambdasFor, objectiveAndGradient, type FitMatch } from '../src/model/fit.ts';
 import { withParams } from '../src/model/params.ts';
 import { timeWeight } from '../src/model/weights.ts';
 import { temper, logPool, redistribute } from '../src/model/blend.ts';
@@ -89,17 +89,53 @@ describe('Fit: Gradient', () => {
     expect(maxRel).toBeLessThan(1e-5);
   });
 
-  it('nullt den Daten-Gradienten bei gekapptem Lambda', () => {
-    // Ein Team mit absurd hohem Angriff -> Lambda > 4.5 -> gekappt
+  it('zaehlt Lambdas ausserhalb der Grenzen, kappt aber in der Schaetzung nur mit clipInTraining', () => {
+    // Ein Team mit absurd hohem Angriff -> Lambda > 4.5
     const matches: FitMatch[] = [{ homeId: 1, awayId: 2, homeGoals: 5, awayGoals: 0, weight: 1 }];
-    const params = withParams();
     const layout = buildLayout(matches);
     const theta = new Float64Array(3 + 4);
     theta[0] = 0.3; theta[2] = -0.1; theta[3] = 3.0; // a_1 = 3 -> exp(3.3) >> 4.5
-    const { gradient, clipped } = objectiveAndGradient(theta, matches, layout, params, new Float64Array(2), new Float64Array(2));
-    expect(clipped).toBe(1);
-    // Nur Ridge-Gradient bleibt fuer a_1: 2 * 4 * 3.0 = 24
-    expect(gradient[3]).toBeCloseTo(24, 9);
+    const z = new Float64Array(2);
+
+    // Standard (4.2.1): glatt, Daten-Gradient (x - lambda) w bleibt: Ridge 24 - (5 - e^3.3)
+    const smooth = objectiveAndGradient(theta, matches, layout, withParams(), z, z);
+    expect(smooth.clipped).toBe(1);
+    expect(smooth.gradient[3]).toBeCloseTo(24 - (5 - Math.exp(3.3)), 9);
+
+    // Ablation (4.1.1-Verhalten): nur Ridge-Gradient 2 * 4 * 3.0 = 24
+    const clipped = objectiveAndGradient(theta, matches, layout, withParams({ clipInTraining: true }), z, z);
+    expect(clipped.clipped).toBe(1);
+    expect(clipped.gradient[3]).toBeCloseTo(24, 9);
+  });
+
+  it('Knick: mit Kappung in der Schaetzung ist am Grenzwert kein Gradientenkriterium erfuellbar, ohne schon', () => {
+    // Reproduktion des Ruecktest-Befunds 2023/24 (8:0 Bayern-Darmstadt, Spieltage 10-18):
+    // eine Paarung, deren Optimum genau auf lambdaMax = 4.5 faellt.
+    const league = makeLeague(7, 18, 0.2);
+    const matches = [...simulateSeason(league, 1), ...simulateSeason(league, 2)].map(m => ({ ...m, weight: 0.6 }));
+    const ids = league.teamIds;
+    const best = ids.reduce((a, b) => (league.truth.attack.get(a)! > league.truth.attack.get(b)! ? a : b));
+    const worst = ids.reduce((a, b) => (league.truth.defense.get(a)! > league.truth.defense.get(b)! ? a : b));
+    const all = [...matches, { homeId: best, awayId: worst, homeGoals: 12, awayGoals: 0, weight: 1 }];
+
+    const old = fitRatings(all, { params: withParams({ clipInTraining: true }) });
+    const rawOld = Math.exp(old.ratings.mu + old.ratings.home + old.ratings.attack.get(best)! + old.ratings.defense.get(worst)!);
+    expect(old.diagnostics.converged).toBe(false);
+    expect(old.diagnostics.reason).toBe('max-iterations');
+    expect(rawOld).toBeCloseTo(4.5, 6);          // sitzt exakt auf dem Knick
+    expect(old.diagnostics.gradientNorm).toBeGreaterThan(0.1); // einseitiger Gradient bleibt
+
+    const params = withParams();
+    const now = fitRatings(all, { params });
+    expect(now.diagnostics.converged).toBe(true);
+    expect(now.diagnostics.gradientNorm).toBeLessThanOrEqual(params.gradientTolerance);
+    // Der Ausreisser zieht das Rating hoch, aber der Ridge haelt ihn im Rahmen
+    const rawNow = Math.exp(now.ratings.mu + now.ratings.home + now.ratings.attack.get(best)! + now.ratings.defense.get(worst)!);
+    expect(rawNow).toBeGreaterThan(4.5);
+    expect(rawNow).toBeLessThan(6);
+    // Die Prognose kappt weiterhin
+    expect(lambdasFor(now.ratings, best, worst, params).lambdaH).toBe(4.5);
+    expect(lambdasFor(now.ratings, best, worst, params).clippedH).toBe(true);
   });
 });
 

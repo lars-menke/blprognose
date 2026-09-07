@@ -13,8 +13,9 @@ Lernuebersicht) folgen in eigenen Phasen und bauen auf dieser Bibliothek auf.
 ```bash
 npm install --legacy-peer-deps   # vitest 4 stolpert sonst ueber einen npm-Peer-Bug
 npm run typecheck
-npm test                         # 77 Tests, ~1 s, komplett offline (synthetische Ligen)
+npm test                         # 78 Tests, ~1 s, komplett offline (synthetische Ligen)
 npm run backtest -- --seasons 2023,2024,2025   # braucht Netz: api.openligadb.de
+npm run backtest -- --seasons 2023,2024,2025 --params halfLifeDays=180   # Ablation
 ```
 
 ## Was das Modell tut
@@ -24,6 +25,7 @@ npm run backtest -- --seasons 2023,2024,2025   # braucht Netz: api.openligadb.de
 | Teamstaerken | `λ_H = exp(μ + h + a_H + d_A)`, `λ_A = exp(μ + a_A + d_H)` — gemeinsamer Fit aller Angriffs-/Abwehrwerte, Ridge-regularisiert, jeden Schritt zentriert |
 | Aktualitaet | Zeitgewicht `exp(-ln2 · t / 210 Tage)`. Das ist der **einzige** Form-Mechanismus — kein zusaetzlicher Form-Blend |
 | Optimierer | Zwei Stufen. (1) Adam (lr 0.045) mit dem spezifizierten Kriterium: Parameteraenderung < 2e-6 **und** relative Zielfunktionsaenderung < 1e-9 ueber 20 Schritte, ab Schritt 120, max 850. (2) Newton-Politur im Tangentialraum der Zentrierung; **konvergiert** heisst: projizierter Gradient ≤ 1e-6. Grund: Adams Kriterium misst nur den Schrittkollaps und blieb messbar 0,024 ueber dem Minimum stehen -- startwertabhaengig |
+| Kappung | λ ∈ [0.30, 4.50] nur in der **Prognose**. In der Schaetzung seit 4.2.1 nicht mehr: die Kappung in der Likelihood erzeugte einen Knick, auf dem das Optimum nach einem 8:0 neun Spieltage lang sass und kein Gradientenkriterium erfuellbar war (`docs/backtest-4.2.0.md`) |
 | Matrix | Poisson × Dixon-Coles (ρ = −0.10), mindestens 0..10 Tore, erweitert bis Restmasse ≤ 5e-9. **Kein** Remis-Boost, **keine** Vielfalts-Regel |
 | Aufsteiger | `0.60 · Zweitliga-Rating + ln(Uebersetzungsfaktor)`; Faktor aus frueheren Aufsteigern geschaetzt (Grenzen 0.72–0.96 / 1.04–1.35), Fallback 0.85/1.15 |
 | Markt | The Odds API, Power-De-vig, logarithmischer Pool `norm(p_model^0.6 · p_market^0.4)`, Temperatur 1.10 Modell / 1.00 Markt |
@@ -74,7 +76,8 @@ src/
   evaluation/metrics.ts Log-Loss, Brier, RPS (ungeteilt), Punkte, gleiche Teilmenge
   forecast.ts           Orchestrator: Datensatz -> Modell -> Prognoseobjekt -> Simulation
 scripts/backtest.ts     Roll-forward-Ruecktest gegen Liga-Poisson-Basis
-tests/                  77 Tests, u.a. Finite-Differenzen-Gradient, Parameter-Rueckgewinnung, Startwert-Unabhaengigkeit
+tests/                  78 Tests, u.a. Finite-Differenzen-Gradient, Parameter-Rueckgewinnung, Startwert-Unabhaengigkeit, Knick-Reproduktion
+docs/backtest-4.2.0.md  erster Ruecktest auf echten Daten, Befund und Fix
 ```
 
 ## Was belegt ist — und was nicht
@@ -93,12 +96,18 @@ als konvergiert gemeldet, und beide Startarten blieben 0,024 ueber dem
 Minimum. Deshalb die Newton-Stufe mit projiziertem Gradienten. Am Modell
 aendert das nichts, am Nachweis viel.
 
-**Nicht belegt:** die Prognoseguete auf echten Daten. Dieser Kern wurde ohne
-Netzwerkzugriff gebaut. Der erste Lauf von `npm run backtest` gegen OpenLigaDB
-ist die Abnahme — Referenzwerte aus dem Review fuer 4.1.1 auf 918 Spielen:
-1X2 52,51 %, Log-Loss 0,99025, exakt (bedingt) 8,28 %. Abweichungen nach oben
-oder unten sind zu erwarten, weil Aufsteiger-Priors und Entscheidungsregel
-veraendert wurden; sie muessen erklaert, nicht wegoptimiert werden.
+**Belegt auf echten Daten (4.2.0, 07.09.2026, `docs/backtest-4.2.0.md`):**
+Roll-forward ueber 2023/24 bis 2025/26, 918 Spiele, reiner Modellpfad:
+1X2 52,61 %, Log-Loss 0,99047, exakt (bedingt) 8,17 %. Referenz 4.1.1 auf
+denselben Spielen: 52,51 % / 0,99025 / 8,28 %. Der Neuaufbau reproduziert
+4.1.1 auf Rauschniveau. Gegen die Liga-Poisson-Basis: Log-Loss −0,091,
+Bootstrap-Intervall [−0,126; −0,079].
+
+Derselbe Lauf zeigte acht nicht konvergierte Fits (2023/24, Spieltage
+10–18): das Optimum sass nach dem 8:0 Bayern–Darmstadt exakt auf der
+Kappungsgrenze, wo die in der Likelihood gekappte Zielfunktion einen Knick
+hat. 4.2.1 nimmt die Kappung aus der Schaetzung; der Ruecktest fuer 4.2.1
+steht aus.
 
 Weiter offen: Marktgewicht 0.40 und Temperaturen sind nicht auf BL-Daten
 validiert (braucht historische Quoten), kein unangetasteter Testzeitraum,

@@ -5,9 +5,11 @@ framework-freie TypeScript-Bibliothek** (Phase 1). Oberflaeche und Persistenz
 kommen in spaeteren Phasen und bauen auf `src/` auf, ohne dort etwas zu
 duplizieren.
 
-Modellversion: **4.2.0** (`src/model/params.ts`). Lineage: 4.1.1 (Review vom
+Modellversion: **4.2.1** (`src/model/params.ts`). Lineage: 4.1.1 (Review vom
 07.09.2026, `docs/review-4.1.1.md`) mit den dort dokumentierten Fehlern
-korrigiert. Der aeltere heuristische Kern (Draw-Boost, Monokultur-Schutz,
+korrigiert; 4.2.0 auf echten Daten als Reproduktion von 4.1.1 belegt
+(`docs/backtest-4.2.0.md`); 4.2.1 nimmt die Lambda-Kappung aus der
+Schaetzung (Knick-Befund, ebenda). Der aeltere heuristische Kern (Draw-Boost, Monokultur-Schutz,
 Form-Blend, Dissens-Signal) ist **bewusst nicht** Teil dieses Modells — siehe
 "Nicht machen".
 
@@ -18,7 +20,12 @@ npm install --legacy-peer-deps      # npm-Peer-Bug mit vitest 4
 npm run typecheck                    # tsc --noEmit, strict
 npm test                             # vitest, offline, ~1 s
 npm run backtest -- --seasons 2023,2024,2025   # braucht Netz
+npm run backtest -- --seasons 2023,2024,2025 --params halfLifeDays=180,rho=-0.13   # Ablation
 ```
+
+Der Ruecktest laeuft nicht in dieser Umgebung (kein Netz). Ergebnisse kommen
+vom Nutzer (Codespace) und werden als `docs/backtest-<version>.md` mit Datum
+abgelegt, bevor irgendetwas daraus abgeleitet wird.
 
 ## Architekturregeln (nicht verhandelbar)
 
@@ -72,9 +79,13 @@ Optimierer ist zweistufig (Adam wie spezifiziert, dann Newton im
 Tangentialraum der Zentrierung). Adams eigenes Kriterium allein blieb
 messbar 0,024 ueber dem Minimum -- nie wieder auf `adamConverged` allein
 verlassen, `converged` ist das Gradientenkriterium.
-**Nicht belegt:** Guete auf echten Daten — Backtest gegen OpenLigaDB steht aus
-(kein Netz in der Entwicklungsumgebung). Referenz 4.1.1: 1X2 52,51 %,
-Log-Loss 0,99025 ueber 918 Spiele.
+Belegt auf echten Daten (4.2.0, 918 Spiele 2023-2025): 1X2 52,61 %,
+Log-Loss 0,99047 -- Reproduktion von 4.1.1 (52,51 % / 0,99025); gegen
+Liga-Poisson-Basis -0,091 Log-Loss, Bootstrap [-0,126; -0,079].
+Befund dabei: Kappung in der Likelihood erzeugt einen Knick; nach einem 8:0
+sass das Optimum neun Spieltage darauf, unkonvergierbar. 4.2.1 kappt nur
+noch in der Prognose. **Offen:** Ruecktest 4.2.1 (Erwartung: keine
+Warnung, Guete innerhalb ~0,002 Log-Loss), Ablationen ueber `--params`.
 
 Naechste Phasen:
 - Phase 2: Persistenz und Freeze (Vorabprognosen mit DB-Zeit, Parametersatz,

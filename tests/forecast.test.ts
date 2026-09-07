@@ -110,7 +110,7 @@ describe('Orchestrator', () => {
       expect(f.scoreMatrix.cells[1][1]).toBeCloseTo(f.modelScoreMatrix.cells[1][1], 12);
       expect(f.decisions.primaryRule).toBe('tipGame');
       expect(f.decisions.tipGame.expectedPoints).toBeGreaterThan(0);
-      expect(f.modelVersion).toBe('4.2.0');
+      expect(f.modelVersion).toBe('4.2.1');
     }
     // Bereits gespielte Spiele bekommen keine Prognose
     expect(buildForecasts(model, data.current.filter(m => m.matchday === 3))).toHaveLength(0);

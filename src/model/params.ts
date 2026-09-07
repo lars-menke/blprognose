@@ -1,9 +1,13 @@
-// Aktueller Parametersatz (Modell 4.1.1 -> 4.2.0). Werte aus dem Review
-// vom 07.09.2026, Abschnitt 6. Sie gelten als historisch freigegeben, NICHT
-// als nachgewiesen optimal: eine vollstaendig dokumentierte innere Suche mit
-// Auswahlprotokoll liegt nicht vor. Aenderungen nur nach einem sauberen
+// Aktueller Parametersatz (Modell 4.1.1 -> 4.2.0 -> 4.2.1). Werte aus dem
+// Review vom 07.09.2026, Abschnitt 6. Sie gelten als historisch freigegeben,
+// NICHT als nachgewiesen optimal: eine vollstaendig dokumentierte innere Suche
+// mit Auswahlprotokoll liegt nicht vor. Aenderungen nur nach einem sauberen
 // Vergleich auf einem getrennten Zeitraum (siehe docs/review-4.1.1.md,
 // Abschnitt 18, Prioritaet 3).
+//
+// 4.2.0 reproduziert 4.1.1 auf 2023-2025 (docs/backtest-4.2.0.md): 1X2
+// 52,61 % vs 52,51 %, Log-Loss 0,99047 vs 0,99025. 4.2.1 aendert nur die
+// Kappung waehrend der Schaetzung (clipInTraining), siehe dort.
 
 export interface ModelParams {
   /** Zeitgewichtung: nach so vielen Tagen zaehlt ein Spiel halb. */
@@ -29,6 +33,17 @@ export interface ModelParams {
   promotedFallbackDefenseLog: number;
   lambdaMin: number;
   lambdaMax: number;
+  /**
+   * Kappung auch INNERHALB der Likelihood (Verhalten 4.1.1/4.2.0). Erzeugt
+   * einen Knick der Zielfunktion: Liegt das Optimum genau auf der Grenze --
+   * gemessen im Ruecktest 2023/24 ab dem 8:0 Bayern-Darmstadt, Spieltage
+   * 10-18 -- ist dort KEIN Gradientenkriterium erfuellbar (einseitiger
+   * Gradient (x - lambda) w von unten, 0 von oben). Seit 4.2.1 aus: die
+   * Kappung ist eine Sicherheitsgrenze der Prognose (lambdasFor), die
+   * Schaetzung bleibt glatt; Ausreisser daempft der Ridge. Der Schalter
+   * bleibt fuer die Ablation im Ruecktest (--params clipInTraining=true).
+   */
+  clipInTraining: boolean;
   maxIterations: number;
   learningRate: number;
   adamBeta1: number;
@@ -62,7 +77,7 @@ export interface ModelParams {
   tipSearchMaxGoals: number;
 }
 
-export const MODEL_VERSION = '4.2.0';
+export const MODEL_VERSION = '4.2.1';
 
 export const DEFAULT_PARAMS: Readonly<ModelParams> = Object.freeze({
   halfLifeDays: 210,
@@ -80,6 +95,7 @@ export const DEFAULT_PARAMS: Readonly<ModelParams> = Object.freeze({
   promotedFallbackDefenseLog: 0.17,
   lambdaMin: 0.30,
   lambdaMax: 4.50,
+  clipInTraining: false,
   maxIterations: 850,
   learningRate: 0.045,
   adamBeta1: 0.9,

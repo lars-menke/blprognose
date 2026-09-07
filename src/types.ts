@@ -80,7 +80,12 @@ export interface FitDiagnostics {
   gradientNorm: number;
   /** Regularisierte Zielfunktion (zu minimieren) beim Abbruch. */
   objective: number;
-  /** Anteil der Trainingsspiele, bei denen mindestens ein Lambda gekappt wurde. */
+  /**
+   * Anteil der Trainingsspiele, bei denen mindestens ein Lambda ausserhalb
+   * [lambdaMin, lambdaMax] liegt. Diagnose: haeufig = Datenfehler oder zu
+   * schwache Regularisierung (v2.1, Abschnitt 6). Gekappt wird nur in der
+   * Prognose, in der Schaetzung nur bei clipInTraining.
+   */
   clippedShare: number;
   /** Summe der Zeitgewichte = effektive Stichprobengroesse. */
   effectiveSampleSize: number;
